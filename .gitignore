@@ -1,0 +1,26 @@
+# ---- secrets
+.env
+*.env
+*.pfx
+*.pem
+
+# ---- the private family archive: NEVER committed (this repository is public)
+# recordings, transcripts, photos, family background, life events
+media/
+archive/
+# story chapters: Dad's words, audio, music, photos and paintings stay private;
+# only the chapter player page (index.html) is shared as a template
+stories/*/*
+!stories/*/index.html
+
+# ---- build output (contains the family content above)
+site/
+site-tv/
+exports/
+.render-cache/
+
+# ---- local tooling
+__pycache__/
+*.pyc
+.vscode/
+.claude/

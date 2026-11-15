@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0f0d0b">
+<title>Humlog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tiro+Devanagari+Hindi&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #0f0d0b; --side: #15120f; --panel: #1d1915; --line: rgba(243,237,226,.10);
+    --ink: #f3ede2; --ink-soft: rgba(243,237,226,.76); --ink-faint: rgba(243,237,226,.47);
+    --amber: #d9a45b; --amber-soft: rgba(217,164,91,.15);
+    --hi: "Tiro Devanagari Hindi", "Nirmala UI", "Mangal", serif;
+    --en: "Cormorant Garamond", Georgia, serif;
+    --ui: "Inter", system-ui, sans-serif;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
+  body { font: 400 15px/1.45 var(--ui); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+  [hidden] { display: none !important; }
+  .unclear { border-bottom: 1px dotted var(--amber); }
+
+  /* ---------------- the stage fills the screen ---------------- */
+  .stage { position: fixed; inset: 0; background: #0b0908; }
+  .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+  /* top bar: menu button + where you are */
+  .topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 8; display: flex; align-items: center; gap: 10px;
+    padding: calc(10px + var(--safe-t)) 12px 10px; pointer-events: none;
+    background: linear-gradient(rgba(11,9,8,.85), rgba(11,9,8,0)); }
+  .topbar > * { pointer-events: auto; }
+  .menu-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(29,25,21,.75);
+    border: 1px solid var(--line); backdrop-filter: blur(6px); flex: none; }
+  .menu-btn svg { width: 20px; height: 20px; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; fill: none; }
+  .where { min-width: 0; flex: 1; }
+  .fs-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(29,25,21,.75);
+    border: 1px solid var(--line); backdrop-filter: blur(6px); flex: none; }
+  .fs-btn svg { width: 18px; height: 18px; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  /* immersive mode (iPhone fallback): top bar fades away while playing, tap to show it again */
+  body.immersive .topbar { opacity: 0; transition: opacity .6s; }
+  body.immersive.peek .topbar { opacity: 1; transition: opacity .2s; }
+  .where b { display: block; font: 500 20px/1.15 var(--en); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .where span { display: block; font-size: 12px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* voice scene: title, live caption, controls */
+  .vstage { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto;
+    padding: calc(76px + var(--safe-t)) 20px 0; }
+  .vstage .head { text-align: center; }
+  .kicker { font: 600 11px/1.4 var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }
+  .vstage .title-h { font: 400 clamp(25px, 4vw, 42px)/1.35 var(--hi); margin-top: 10px; }
+  .vstage .title-e { font: italic 400 clamp(19px, 2.2vw, 25px)/1.3 var(--en); color: var(--ink-soft); }
+  .vstage .summary { max-width: 34rem; margin: 12px auto 0; font-size: 14px; color: var(--ink-faint); }
+  .cap { align-self: center; text-align: center; max-width: 44rem; width: 100%; margin: 0 auto; transition: opacity .35s; }
+  .cap .who { font: 600 10px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--amber); margin-bottom: 12px; }
+  .cap .h { font: 400 clamp(23px, 3vw, 34px)/1.5 var(--hi); }
+  .cap .e { font: italic 400 clamp(18px, 2vw, 22px)/1.35 var(--en); color: var(--ink-soft); margin-top: 8px; }
+  .cap.iv .who { color: var(--ink-faint); }
+  .cap.iv .h { font-size: clamp(18px, 2.2vw, 23px); color: var(--ink-soft); }
+  .cap.iv .e { font-size: clamp(16px, 1.6vw, 19px); color: var(--ink-faint); }
+
+  .controls { display: flex; align-items: center; gap: 10px; padding: 12px 16px calc(14px + var(--safe-b));
+    border-top: 1px solid var(--line); background: rgba(11,9,8,.92); margin: 0 -20px; }
+  .cbtn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(243,237,226,.2); flex: none; }
+  .cbtn.main { background: var(--ink); color: var(--bg); border-color: var(--ink); width: 52px; height: 52px; }
+  .cbtn svg { width: 14px; height: 14px; fill: currentColor; }
+  .cbtn:disabled { opacity: .3; cursor: default; }
+  .track { position: relative; flex: 1; height: 44px; cursor: pointer; touch-action: none; }
+  .track::before { content: ""; position: absolute; left: 0; right: 0; top: 21px; height: 3px; border-radius: 2px; background: rgba(243,237,226,.15); }
+  .track .fill { position: absolute; left: 0; top: 21px; height: 3px; border-radius: 2px; background: var(--amber); }
+  .count { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill { font: 500 12px/1 var(--ui); padding: 11px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); flex: none; }
+
+  /* transcript sheet (slides up from the bottom) */
+  .tx { position: fixed; left: 0; right: 0; bottom: 0; height: 72vh; height: 72dvh; z-index: 20; background: var(--side);
+    border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; transform: translateY(102%); transition: transform .3s ease;
+    display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+  .tx.open { transform: none; box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
+  .tx .bar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+  .tx h2 { font: 500 21px/1.2 var(--en); }
+  .close { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); text-align: center; font-size: 15px; flex: none; }
+  .tx .segs { overflow-y: auto; padding: 8px 8px calc(20px + var(--safe-b)); overscroll-behavior: contain; }
+  .seg { display: grid; grid-template-columns: 42px 1fr; gap: 8px; padding: 10px 8px; border-radius: 8px; cursor: pointer; }
+  .seg.now { background: var(--amber-soft); }
+  .seg .t { font-size: 11px; color: var(--ink-faint); padding-top: 5px; font-variant-numeric: tabular-nums; }
+  .seg .h { font: 400 17px/1.5 var(--hi); }
+  .seg .e { font: italic 400 16px/1.3 var(--en); color: var(--ink-soft); }
+  .seg.iv .h, .seg.iv .e { color: var(--ink-faint); font-size: 14px; }
+
+  /* real photographs: behind a voice moment, the start and the end screens */
+  .photo-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .photo-bg .blur { position: absolute; inset: -30px; background-size: cover; background-position: center;
+    filter: blur(28px) brightness(.32) saturate(.7); transform: scale(1.1); }
+  .photo-bg img { position: absolute; left: 50%; top: 50%; max-width: min(78vw, 640px); max-height: 62%;
+    transform: translate(-50%, -50%) scale(1); filter: brightness(.5) sepia(.15); border-radius: 3px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); animation: photodrift 40s ease-out forwards; }
+  @keyframes photodrift { to { transform: translate(-50%, -50%) scale(1.06); } }
+  .photo-tag { position: absolute; right: 14px; bottom: calc(86px + var(--safe-b)); z-index: 2; font: 500 10px/1.3 var(--ui);
+    letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); padding: 5px 9px; border: 1px solid var(--line);
+    border-radius: 999px; background: rgba(11,9,8,.6); max-width: 70vw; }
+  .vstage > .head, .vstage > .cap, .vstage > .controls { position: relative; z-index: 1; }
+  .cap .h, .cap .e, .vstage .title-h, .vstage .title-e { text-shadow: 0 2px 16px rgba(0,0,0,.85); }
+  .start .photo-bg img, .end .photo-bg img { max-height: 70%; filter: brightness(.3) sepia(.2); }
+  .start > div:not(.photo-bg):not(.photo-tag), .end > div:not(.photo-bg):not(.photo-tag) { position: relative; z-index: 1; }
+  /* a moment with a photo: the photo sits above, Dad's words underneath it (never across his face) */
+  .vstage.has-photo .photo-bg img { top: calc(41% + var(--safe-t) / 2); max-height: 34%; max-width: min(84vw, 520px); filter: brightness(.82) sepia(.12); }
+  .vstage.has-photo .cap { align-self: end; padding-bottom: 18px; }
+  .vstage.has-photo .summary { display: none; }
+  .vstage.has-photo .photo-tag { left: 50%; right: auto; transform: translateX(-50%); bottom: auto;
+    top: calc(58% + var(--safe-t) / 2 + 8px); white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
+  .start .photo-tag, .end .photo-tag { bottom: calc(16px + var(--safe-b)); }
+
+  /* start screen */
+  .start { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; text-align: center; padding: 80px 24px 40px;
+    background: radial-gradient(ellipse at 50% 40%, rgba(46,34,22,.55), rgba(11,9,8,.97)), var(--bg); }
+  .start h2 { font: 400 clamp(46px, 10vw, 76px)/1.2 var(--hi); }
+  .start .en { font: italic 400 clamp(20px, 3vw, 28px)/1.3 var(--en); color: var(--ink-soft); }
+  .start .by { font-size: 13px; color: var(--ink-faint); margin-top: 12px; }
+  .start .go { margin-top: 32px; display: inline-flex; gap: 12px; align-items: center; padding: 17px 30px; border-radius: 999px; background: var(--ink); color: var(--bg);
+    font: 600 13px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; }
+  .start .go svg { width: 13px; height: 13px; fill: currentColor; }
+  .start .resume { display: block; margin: 2px auto 0; font-size: 14px; color: var(--ink-soft); text-align: center; padding: 8px;
+    text-decoration: underline; text-underline-offset: 3px; }
+
+  /* end screen, after the last moment */
+  .end { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; text-align: center; padding: 80px 24px 40px; background: var(--bg); }
+  .end h2 { font: 400 clamp(30px, 6vw, 48px)/1.3 var(--hi); }
+  .end .en { font: italic 400 clamp(19px, 2.6vw, 25px)/1.3 var(--en); color: var(--ink-soft); }
+  .end .by { font-size: 13px; color: var(--ink-faint); margin-top: 12px; }
+  .end .go { margin-top: 28px; display: inline-flex; gap: 12px; align-items: center; padding: 15px 26px; border-radius: 999px;
+    border: 1px solid rgba(243,237,226,.35); font: 600 12px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; }
+
+  /* ---------------- the menu slides in from the left ---------------- */
+  .scrim { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.55); opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+  .menu { position: fixed; top: 0; bottom: 0; left: 0; z-index: 31; width: min(400px, 88vw); background: var(--side);
+    border-right: 1px solid var(--line); transform: translateX(-102%); transition: transform .3s ease; visibility: hidden;
+    overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(30px + var(--safe-b)); }
+  .menu.open { transform: none; visibility: visible; box-shadow: 20px 0 60px rgba(0,0,0,.5); }
+  .menu header { position: sticky; top: 0; z-index: 2; background: var(--side); padding: calc(16px + var(--safe-t)) 18px 12px;
+    border-bottom: 1px solid var(--line); }
+  .menu .row { display: flex; align-items: center; justify-content: space-between; }
+  .menu h1 { font: 500 32px/1.1 var(--en); }
+  .menu .hi-sub { font: 400 17px/1.3 var(--hi); color: var(--ink-faint); }
+  .people { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .chip { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); font-size: 14px; color: var(--ink-faint); }
+  .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+
+  .decade h3 { font: 500 30px/1 var(--en); color: var(--ink-faint); padding: 24px 18px 8px 46px; }
+  .list { position: relative; }
+  .list::before { content: ""; position: absolute; left: 25px; top: 0; bottom: 0; width: 1px; background: var(--line); }
+  .item { position: relative; display: block; width: 100%; padding: 13px 16px 13px 46px; border-left: 3px solid transparent; }
+  .item:active { background: rgba(243,237,226,.05); }
+  .item.now { background: var(--amber-soft); border-left-color: var(--amber); }
+  .item .dot { position: absolute; left: 20px; top: 19px; width: 11px; height: 11px; border-radius: 50%; background: var(--amber); }
+  .item.approx .dot { background: var(--side); border: 1.5px dashed var(--amber); }
+  .item.unknown .dot { background: var(--side); border: 1.5px dotted var(--ink-faint); }
+  .item.now .dot { box-shadow: 0 0 0 4px rgba(217,164,91,.25); }
+  .item .when { font: 600 13px/1 var(--ui); letter-spacing: .06em; color: var(--ink-faint); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .item .h { font: 400 21px/1.45 var(--hi); margin-top: 7px; }
+  .item .e { font: 500 19px/1.3 var(--en); color: var(--ink-soft); }
+  .kind { font: 600 9px/1 var(--ui); letter-spacing: .12em; padding: 3px 6px; border-radius: 3px; }
+  .kind.story { background: var(--amber); color: #1b130a; }
+
+  /* small screens */
+  @media (max-width: 640px) {
+    .vstage { padding: calc(70px + var(--safe-t)) 16px 0; }
+    .vstage .summary { display: none; }
+    .controls { gap: 8px; padding-left: 12px; padding-right: 12px; margin: 0 -16px; }
+    .cbtn { width: 42px; height: 42px; }
+    .count { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .menu, .scrim, .tx { transition: none; } }
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+  <iframe id="frame" title="Story" allow="autoplay; fullscreen" hidden></iframe>
+
+  <section class="vstage" id="voice" hidden>
+    <div class="photo-bg" id="vPhoto" hidden></div>
+    <div class="photo-tag" id="vPhotoTag" hidden></div>
+    <div class="head">
+      <div class="kicker" id="vKicker"></div>
+      <div class="title-h" id="vTitleH"></div>
+      <div class="title-e" id="vTitleE"></div>
+      <p class="summary" id="vSummary"></p>
+    </div>
+    <div class="cap" id="vCap"></div>
+    <div class="controls">
+      <button class="cbtn" id="prev" aria-label="Previous moment"><svg viewBox="0 0 14 14"><path d="M3 1h2v12H3zM13 1v12L5 7z"/></svg></button>
+      <button class="cbtn main" id="pp" aria-label="Play or pause"><svg id="ppIcon" viewBox="0 0 14 14"><path d="M2 1l11 6-11 6z"/></svg></button>
+      <button class="cbtn" id="next" aria-label="Next moment"><svg viewBox="0 0 14 14"><path d="M9 1h2v12H9zM1 1v12l8-6z"/></svg></button>
+      <div class="track" id="track"><div class="fill" id="fill"></div></div>
+      <span class="count" id="count"></span>
+      <button class="pill" id="txBtn">Transcript</button>
+    </div>
+  </section>
+
+  <div class="start" id="start">
+    <div class="photo-bg" id="startPhoto" hidden></div>
+    <div class="photo-tag" id="startPhotoTag" hidden></div>
+    <div>
+      <h2>हम लोग</h2>
+      <div class="en">Dad, in his own voice</div>
+      <div class="by" id="startBy"></div>
+      <button class="go" id="go"><svg viewBox="0 0 14 14"><path d="M2 1l11 6-11 6z"/></svg>Play from the beginning</button>
+      <button class="resume" id="resume" hidden></button>
+    </div>
+  </div>
+
+  <div class="end" id="end" hidden>
+    <div class="photo-bg" id="endPhoto" hidden></div>
+    <div class="photo-tag" id="endPhotoTag" hidden></div>
+    <div>
+      <h2>अभी के लिए बस इतना</h2>
+      <div class="en">That's all for now</div>
+      <div class="by">More of Dad's stories, and Mum's and Dadi's, are on their way.</div>
+      <button class="go" id="again">Start again</button>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="Open the timeline" aria-controls="menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="where" id="where"><b>Humlog</b><span>हम लोग</span></div>
+    <button class="fs-btn" id="fsBtn" aria-label="Full screen"><svg id="fsIcon" viewBox="0 0 24 24"></svg></button>
+  </div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<nav class="menu" id="menu" aria-label="Timeline">
+  <header>
+    <div class="row">
+      <div><h1>Humlog</h1><div class="hi-sub">हम लोग</div></div>
+      <button class="close" id="menuClose" aria-label="Close the timeline">✕</button>
+    </div>
+    <div class="people" id="people"></div>
+  </header>
+  <div id="timeline"></div>
+</nav>
+
+<aside class="tx" id="tx" aria-label="Transcript">
+  <div class="bar"><h2 id="txTitle">Transcript</h2><button class="close" id="txClose" aria-label="Close">✕</button></div>
+  <div class="segs" id="txSegs"></div>
+</aside>
+
+<audio id="audio" preload="none"></audio>
+<script src="data.js"></script>
+<script>
+(() => {
+  const A = window.ARCHIVE, $ = id => document.getElementById(id);
+  const audio = $("audio"), frame = $("frame"), menu = $("menu"), scrim = $("scrim");
+  const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const mark = s => esc(s).replace(/\[\?(.+?)\?\]/g, '<span class="unclear" title="Unclear in the recording">$1</span>')
+                          .replace(/\[अस्पष्ट\]/g, '<span class="unclear" title="Unclear in the recording">…</span>');
+  const PLAY = '<path d="M2 1l11 6-11 6z"/>', PAUSE = '<path d="M2 1h3.5v12H2zM8.5 1H12v12H8.5z"/>';
+  const recById = Object.fromEntries(A.recordings.map(r => [r.id, r]));
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+  // ------------------------------------------------ moments, in date order
+  // A story (film) stands in for the events it covers; every other event plays from its recording.
+  const covered = new Set(A.chapters.flatMap(c => c.event_ids));
+  const scenes = [];
+  A.events.forEach(e => { if (!covered.has(e.id) && e.sources?.length) scenes.push({ kind: "voice", id: e.id, year: e.year, ev: e }); });
+  A.chapters.forEach(c => scenes.push({ kind: "story", id: c.id, year: c.year, ch: c }));
+  scenes.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || (a.kind === "story" ? -1 : 1));
+  const sceneIndex = id => scenes.findIndex(s => s.id === id);
+  const firstStory = scenes.findIndex(s => s.kind === "story"); // "the beginning" = the first story
+  const whenText = (year, basis, yearEnd) => !year ? "Date not known"
+    : (basis === "stated" ? "" : "c. ") + year + (yearEnd && yearEnd !== year ? "–" + yearEnd : "");
+  const titleHi = s => s.kind === "story" ? s.ch.title_hi : s.ev.title_hi;
+  const titleEn = s => s.kind === "story" ? s.ch.title_en : s.ev.title_en;
+
+  // ------------------------------------------------ menu
+  $("people").innerHTML = A.people.map(p =>
+    `<span class="chip ${p.status === "recorded" ? "on" : ""}">${esc(p.name_en)}${p.status !== "recorded" ? " · soon" : ""}</span>`).join("");
+  const byDecade = {};
+  scenes.forEach((s, i) => { const d = s.year ? Math.floor(s.year / 10) * 10 + "s" : "Date not known"; (byDecade[d] ||= []).push(i); });
+  $("timeline").innerHTML = Object.entries(byDecade).map(([dec, idxs]) => `<section class="decade"><h3>${dec}</h3><div class="list">${
+    idxs.map(i => {
+      const s = scenes[i];
+      if (s.kind === "story") {
+        const c = s.ch;
+        return `<button class="item" data-i="${i}"><span class="dot"></span>
+          <div class="when">${esc(c.when)} <span class="kind story">STORY · ${fmt(c.duration)}</span></div>
+          <div class="h">${esc(c.title_hi)}</div><div class="e">${esc(c.title_en)}</div></button>`;
+      }
+      const e = s.ev, cls = e.date_basis === "stated" ? "" : (e.year ? "approx" : "unknown");
+      return `<button class="item ${cls}" data-i="${i}"><span class="dot"></span>
+        <div class="when">${whenText(e.year, e.date_basis, e.year_end)}</div>
+        <div class="h">${esc(e.title_hi)}</div><div class="e">${esc(e.title_en)}</div></button>`;
+    }).join("")}</div></section>`).join("");
+  // real photographs
+  const photoById = Object.fromEntries((A.photos || []).map(p => [p.id, p]));
+  const photoTag = p => `Photograph · ${p.date}${p.edits && p.edits !== "unedited" ? " · " + p.edits.split(",").slice(-2)[0].trim() : ""}`;
+  function showPhoto(slot, tag, p) {
+    if (!p) { $(slot).hidden = true; $(tag).hidden = true; return; }
+    $(slot).innerHTML = `<div class="blur" style="background-image:url('${esc(p.url)}')"></div><img src="${esc(p.url)}" alt="${esc(p.caption)}">`;
+    $(tag).textContent = photoTag(p);
+    $(slot).hidden = false; $(tag).hidden = false;
+  }
+  const usePhoto = use => (A.photos || []).find(p => (p.use || []).includes(use));
+  showPhoto("startPhoto", "startPhotoTag", usePhoto("start"));
+
+  function openMenu() {
+    menu.classList.add("open"); scrim.classList.add("show"); $("menuBtn").setAttribute("aria-expanded", "true");
+    menu.querySelector(".item.now")?.scrollIntoView({ block: "center" });
+    $("menuClose").focus({ preventScroll: true });
+  }
+  function closeMenu() {
+    if (!menu.classList.contains("open")) return;
+    menu.classList.remove("open"); scrim.classList.remove("show"); $("menuBtn").setAttribute("aria-expanded", "false");
+  }
+  $("menuBtn").onclick = openMenu; $("menuClose").onclick = closeMenu; scrim.onclick = closeMenu;
+  let sx = null; // swipe left to close
+  menu.addEventListener("touchstart", e => { sx = e.touches[0].clientX; }, { passive: true });
+  menu.addEventListener("touchend", e => { if (sx !== null && sx - e.changedTouches[0].clientX > 60) closeMenu(); sx = null; });
+
+  // ------------------------------------------------ full screen
+  // Real full screen where the browser allows it; on iPhone (no page full screen) an immersive mode.
+  const root = document.documentElement;
+  const canFS = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  const isFS = () => !!(document.fullscreenElement || document.webkitFullscreenElement) || document.body.classList.contains("immersive");
+  const ICON_IN = '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', ICON_OUT = '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>';
+  const syncFS = () => { $("fsIcon").innerHTML = isFS() ? ICON_OUT : ICON_IN; $("fsBtn").setAttribute("aria-label", isFS() ? "Exit full screen" : "Full screen"); };
+  function enterFS() {
+    if (isFS()) return;
+    if (canFS) (root.requestFullscreen || root.webkitRequestFullscreen).call(root)?.catch?.(() => {});
+    else document.body.classList.add("immersive");
+    syncFS();
+  }
+  function exitFS() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    document.body.classList.remove("immersive", "peek");
+    syncFS();
+  }
+  $("fsBtn").onclick = () => isFS() ? exitFS() : enterFS();
+  document.addEventListener("fullscreenchange", syncFS); document.addEventListener("webkitfullscreenchange", syncFS);
+  let peekTimer; // in immersive mode, a tap brings the top bar back for a few seconds
+  document.addEventListener("pointerdown", () => {
+    if (!document.body.classList.contains("immersive")) return;
+    document.body.classList.add("peek"); clearTimeout(peekTimer);
+    peekTimer = setTimeout(() => document.body.classList.remove("peek"), 3000);
+  });
+  syncFS();
+
+  // ------------------------------------------------ playback
+  let current = -1, passage = null, autoNext = true, lineIdx = -1;
+
+  const highlight = sel => {
+    menu.querySelectorAll(".item").forEach(el => el.classList.remove("now"));
+    if (sel) menu.querySelector(sel)?.classList.add("now");
+  };
+  const setWhere = (title, sub) => { $("where").innerHTML = `<b>${esc(title)}</b><span>${esc(sub)}</span>`; };
+  function stopAll() {
+    audio.pause();
+    try { frame.contentWindow?.postMessage({ cmd: "pause" }, location.origin); } catch (e) {}
+  }
+
+  function playScene(i) {
+    if (i < 0 || i >= scenes.length) return;
+    stopAll(); closeMenu(); $("tx").classList.remove("open");
+    current = i; autoNext = true;
+    $("start").hidden = true; $("end").hidden = true;
+    const s = scenes[i];
+    highlight(`.item[data-i="${i}"]`);
+    setWhere(titleHi(s), `${i + 1} of ${scenes.length} · ${titleEn(s)}`);
+    history.replaceState(null, "", "#" + s.id);
+    store.set("lastScene", s.id);
+    if (s.kind === "story") {
+      $("voice").hidden = true; frame.hidden = false;
+      const url = s.ch.url + "?embed=1&autoplay=1";
+      if (frame.dataset.url === url) frame.contentWindow.postMessage({ cmd: "restart" }, location.origin);
+      else { frame.dataset.url = url; frame.src = url; }
+    } else {
+      const e = s.ev, src = e.sources[0];
+      showVoice(recById[src.recording], src.start, src.end, {
+        kicker: [whenText(e.year, e.date_basis, e.year_end), ...(e.places || [])].join(" · "),
+        h: e.title_hi, e: e.title_en, summary: e.summary_en, photo: photoById[(e.photos || [])[0]] });
+    }
+    $("prev").disabled = i === 0; $("next").disabled = i === scenes.length - 1;
+    $("count").textContent = `${i + 1} / ${scenes.length}`;
+  }
+
+  function showVoice(rec, start, end, head, open = false) {
+    frame.hidden = true; $("voice").hidden = false;
+    $("vKicker").textContent = head.kicker || "";
+    $("vTitleH").textContent = head.h || ""; $("vTitleE").textContent = head.e || "";
+    $("vSummary").textContent = head.summary || "";
+    showPhoto("vPhoto", "vPhotoTag", head.photo);
+    $("voice").classList.toggle("has-photo", !!head.photo);
+    $("vCap").innerHTML = ""; $("fill").style.width = "0";
+    passage = { rec, start, end, open }; lineIdx = -1;
+    if (!audio.src.endsWith(rec.file)) audio.src = rec.file;
+    const go = () => { audio.currentTime = Math.max(start - 0.3, 0); audio.play().catch(() => {}); };
+    audio.readyState >= 1 ? go() : (audio.addEventListener("loadedmetadata", go, { once: true }), audio.load());
+  }
+
+  function next() {
+    if (!autoNext || current < 0) return;
+    if (current < scenes.length - 1) return playScene(current + 1);
+    // after the last moment: a quiet closing screen with Dad today
+    stopAll(); $("end").hidden = false; highlight(null); setWhere("Humlog", "हम लोग");
+    showPhoto("endPhoto", "endPhotoTag", usePhoto("end"));
+  }
+  $("again").onclick = () => { $("end").hidden = true; playScene(firstStory >= 0 ? firstStory : 0); };
+
+  menu.addEventListener("click", ev => {
+    const it = ev.target.closest(".item"); if (it) { enterFS(); playScene(+it.dataset.i); }
+  });
+
+  $("pp").onclick = () => audio.paused ? audio.play() : audio.pause();
+  $("prev").onclick = () => playScene(current - 1);
+  $("next").onclick = () => playScene(current + 1);
+  audio.addEventListener("play", () => $("ppIcon").innerHTML = PAUSE);
+  audio.addEventListener("pause", () => $("ppIcon").innerHTML = PLAY);
+
+  // seek by tap or drag
+  const seekTo = x => {
+    if (!passage) return;
+    const b = $("track").getBoundingClientRect(), k = Math.min(1, Math.max(0, (x - b.left) / b.width));
+    audio.currentTime = passage.start + k * (passage.end - passage.start);
+  };
+  $("track").addEventListener("pointerdown", e => { $("track").setPointerCapture(e.pointerId); seekTo(e.clientX); });
+  $("track").addEventListener("pointermove", e => { if (e.buttons) seekTo(e.clientX); });
+
+  audio.addEventListener("timeupdate", () => {
+    if (!passage) return;
+    const t = audio.currentTime, p = passage, len = p.end - p.start;
+    if (!p.open && t > p.end + 0.6) { audio.pause(); passage = { ...p, open: true }; setTimeout(next, 1800); return; }
+    $("fill").style.width = Math.min(100, Math.max(0, (t - p.start) / len * 100)) + "%";
+    const i = p.rec.segments.findIndex(s => t >= s.start && t < s.end + 0.4);
+    if (i >= 0 && i !== lineIdx) {
+      lineIdx = i; const s = p.rec.segments[i], cap = $("vCap");
+      cap.style.opacity = 0;
+      setTimeout(() => {
+        cap.className = "cap" + (s.speaker === "DAD" ? "" : " iv");
+        cap.innerHTML = `<div class="who">${s.speaker === "DAD" ? "Dad" : "Question"}</div>
+          <div class="h">${mark(s.text_hi)}</div><div class="e">${mark(s.text_en)}</div>`;
+        cap.style.opacity = 1;
+      }, 180);
+      $("txSegs").querySelectorAll(".seg").forEach(el => {
+        const on = +el.dataset.i === i; el.classList.toggle("now", on);
+        if (on && $("tx").classList.contains("open")) el.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
+  });
+  audio.addEventListener("ended", () => { if (passage?.open && current >= 0) next(); });
+
+  // transcript sheet
+  $("txBtn").onclick = () => {
+    if (!passage) return;
+    const r = passage.rec;
+    $("txTitle").textContent = r.title + " · transcript";
+    $("txSegs").innerHTML = r.segments.map((s, i) => `<div class="seg ${s.speaker === "DAD" ? "" : "iv"}" data-i="${i}">
+      <div class="t">${fmt(s.start)}</div><div><div class="h">${mark(s.text_hi)}</div><div class="e">${mark(s.text_en)}</div></div></div>`).join("");
+    $("txSegs").querySelectorAll(".seg").forEach(el => el.onclick = () => {
+      passage = { ...passage, open: true }; autoNext = false; audio.currentTime = r.segments[+el.dataset.i].start; audio.play();
+    });
+    lineIdx = -1;
+    $("tx").classList.add("open");
+  };
+  $("txClose").onclick = () => $("tx").classList.remove("open");
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closeMenu(); $("tx").classList.remove("open"); document.body.classList.remove("immersive", "peek"); syncFS(); }
+    if (e.key === " " && !$("voice").hidden && e.target === document.body) { e.preventDefault(); $("pp").click(); }
+  });
+
+  // an embedded story tells us when it has finished
+  window.addEventListener("message", ev => {
+    if (ev.origin !== location.origin) return;
+    if (ev.data?.type === "chapter-ended") setTimeout(next, 1500);
+  });
+
+  // ------------------------------------------------ start screen
+  $("startBy").textContent = `${scenes.length} moments from ${A.recordings.length} conversations`;
+  $("go").onclick = () => { enterFS(); playScene(firstStory >= 0 ? firstStory : 0); };
+
+  // a shared link (#moment-id) or where you left off last time
+  const linked = sceneIndex(location.hash.slice(1));
+  const last = sceneIndex(store.get("lastScene") || "");
+  const offer = linked >= 0 ? linked : (last > 0 ? last : -1);
+  if (offer >= 0) {
+    $("resume").hidden = false;
+    $("resume").textContent = (linked >= 0 ? "Play the shared moment: " : "Continue where you left off: ") + titleEn(scenes[offer]);
+    $("resume").onclick = () => { enterFS(); playScene(offer); };
+  }
+})();
+</script>
+</body>
+</html>
