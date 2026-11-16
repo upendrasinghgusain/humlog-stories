@@ -13,6 +13,7 @@ Usage:
 """
 
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -110,9 +111,15 @@ def main() -> None:
 
     # ---- chapters
     chapters = []
+    # Chapters marked "draft": true are only built for local preview (HUMLOG_DRAFTS=1), never deployed.
+    drafts = os.environ.get("HUMLOG_DRAFTS") == "1"
     for cfg_file in sorted((ROOT / "stories").glob("*/story.config.json")):
         folder = cfg_file.parent
         cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
+        if cfg.get("draft") and not drafts:
+            shutil.rmtree(SITE / "chapters" / folder.name, ignore_errors=True)
+            print(f"  skipping draft chapter {folder.name}")
+            continue
         story = json.loads(re.search(r"\{.*\}", (folder / "story.js").read_text(encoding="utf-8"), re.S)[0])
         out = SITE / "chapters" / folder.name
         (out / "images").mkdir(parents=True, exist_ok=True)
