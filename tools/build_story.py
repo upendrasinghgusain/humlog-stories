@@ -47,9 +47,9 @@ def mute_spans(cfg: dict, sil) -> list[tuple[float, float]]:
     Only bursts of <= 0.55 s that are bounded by silence are muted, so Dad's continuous speech
     is never touched. Backchannels spoken over Dad cannot be removed this way.
     """
-    if "interviewer_marks" not in cfg:
-        return []
-    marks = json.loads((ROOT / cfg["interviewer_marks"]).read_text(encoding="utf-8"))
+    marks = json.loads((ROOT / cfg["interviewer_marks"]).read_text(encoding="utf-8")) if "interviewer_marks" in cfg else []
+    # backchannels found by tools/refine_cuts.py ("auto") are hints too: their timing can be ~1 s off
+    marks += [{"start": m[0], "end": m[1]} for m in cfg.get("mute", []) if m[2:] == ["auto"]]
     islands = [(sil[i][1], sil[i + 1][0]) for i in range(len(sil) - 1)]
     spans = []
     for m in marks:
@@ -87,7 +87,7 @@ def main() -> None:
     mutes = mute_spans(cfg, fine)
     # Explicit spans (absolute seconds, found by listening or a pitch check) for backchannels
     # that are not separated from Dad's words by silence.
-    mutes += [tuple(m) for m in cfg.get("mute", [])]
+    mutes += [tuple(m) for m in cfg.get("mute", []) if len(m) == 2]  # hand-checked spans only
 
     pieces, offsets, segs, t, card_no = [], [], [], 1.2, 0  # a short breath of room sound first
     for item in cfg["edit"]:
