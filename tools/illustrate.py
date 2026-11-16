@@ -4,7 +4,8 @@ These are clearly-labelled reconstructions, never presented as photographs.
 
 Usage:
     python tools/illustrate.py <scenes.json> <out-dir> [model]
-scenes.json: {"setting": "place and period", "scenes": [{"id": "path", "prompt": "..."}]}
+scenes.json: {"setting": "place and period", "scenes": [{"id": "path", "prompt": "...", "refs": ["photo.jpg"]}]}
+"refs" (optional): photos of the real place, used only as a reference for the painting.
 """
 
 import base64
@@ -27,9 +28,21 @@ STYLE = (
 )
 
 
-def generate(prompt: str, model: str, setting: str = "") -> bytes:
+REF_NOTE = ("The attached photograph(s) show the real place today. Use them only as a reference for the "
+            "landscape, the shape of the ridge and valley, the layout and the kind of buildings, so the painting "
+            "feels like this actual place; paint it in the style above, as it might have looked in the period "
+            "described, leaving out anything modern. Do not copy the photograph. ")
+
+
+def generate(prompt: str, model: str, setting: str = "", refs: list | None = None) -> bytes:
+    parts = []
+    for r in refs or []:
+        p = pathlib.Path(r)
+        mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
+        parts.append({"inline_data": {"mime_type": mime, "data": base64.b64encode(p.read_bytes()).decode()}})
+    text = STYLE.replace("{setting}", setting + " " if setting else "") + (REF_NOTE if refs else "") + "Scene: " + prompt
     body = {
-        "contents": [{"parts": [{"text": STYLE.replace("{setting}", setting + " " if setting else "") + "Scene: " + prompt}]}],
+        "contents": [{"parts": parts + [{"text": text}]}],
         "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "16:9"}},
     }
     req = urllib.request.Request(
@@ -66,7 +79,8 @@ def main() -> None:
         if target.exists():
             print("skip", target.name)
             continue
-        target.write_bytes(generate(s["prompt"], model, setting))
+        # "refs": reference photos of the real place (private, never published), e.g. media/reference/...
+        target.write_bytes(generate(s["prompt"], model, setting, s.get("refs")))
         print("ok", target.name)
 
 
