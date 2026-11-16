@@ -57,6 +57,9 @@
   .mi { padding: 1vw 3vw 1vw 2.6vw; border-left: .4vw solid transparent; }
   .mi.now .mw { color: #d9a45b; }
   .mi.focus { background: rgba(217,164,91,.2); border-left-color: #d9a45b; }
+  .mi.soon { opacity: .4; }
+  .mi.soon.focus { opacity: .65; }
+  .sc { font-size: .8vw; padding: .1vw .4vw; border: 1px solid #a89880; border-radius: .2vw; margin-left: .5vw; }
   .mw { font-family: sans-serif; font-size: 1.1vw; letter-spacing: .08vw; color: rgba(243,237,226,.55); }
   .st { font-size: .8vw; font-weight: bold; padding: .15vw .4vw; border-radius: .2vw; background: #d9a45b; color: #1b130a; margin-left: .5vw; }
   .mh { font-size: 2.1vw; line-height: 1.45; margin-top: .3vw; }
@@ -134,8 +137,12 @@
   A.events.forEach(function (e) { if (!covered[e.id] && e.sources && e.sources.length) scenes.push({ kind: 'voice', year: e.year, ev: e }); });
   A.chapters.forEach(function (c) { if (c.video) scenes.push({ kind: 'story', year: c.year, ch: c }); });
   scenes.sort(function (a, b) { return ((a.year || 9999) - (b.year || 9999)) || (a.kind === 'story' ? -1 : 1); });
-  var firstStory = 0;
-  for (var i = 0; i < scenes.length; i++) if (scenes[i].kind === 'story') { firstStory = i; break; }
+  // Moments without a story yet stay in the menu, greyed out ("story coming"), but only stories play.
+  function storyFrom(i, dir) { for (var j = i; j >= 0 && j < scenes.length; j += dir) if (scenes[j].kind === 'story') return j; return -1; }
+  var firstStory = Math.max(0, storyFrom(0, 1));
+  var storyCount = 0;
+  for (var i = 0; i < scenes.length; i++) if (scenes[i].kind === 'story') storyCount++;
+  function storyNumber(i) { var n = 0; for (var j = 0; j <= i; j++) if (scenes[j].kind === 'story') n++; return n; }
   var recById = {};
   A.recordings.forEach(function (r) { recById[r.id] = r; });
 
@@ -160,11 +167,11 @@
   }
 
   function play(i) {
-    if (i < 0 || i >= scenes.length) return;
+    if (i < 0 || i >= scenes.length || scenes[i].kind !== 'story') return;
     stopAll();
     current = i; mode = 'playing';
     show($('start'), false); show($('end'), false);
-    $('count').innerHTML = (i + 1) + ' / ' + scenes.length + ' &nbsp;·&nbsp; ▲ menu';
+    $('count').innerHTML = storyNumber(i) + ' / ' + storyCount + ' &nbsp;·&nbsp; ▲ menu';
     var s = scenes[i];
     if (s.kind === 'story') {
       show($('voice'), false); show(video, true);
@@ -194,7 +201,8 @@
     }
   }
   function next() {
-    if (current < scenes.length - 1) return play(current + 1);
+    var n = storyFrom(current + 1, 1);
+    if (n >= 0) return play(n);
     stopAll(); mode = 'end';
     show(video, false); show($('voice'), false); show($('end'), true);
     setPhoto($('endPhoto'), photoFor('end'));
@@ -236,8 +244,8 @@
       var hi = s.kind === 'story' ? s.ch.title_hi : s.ev.title_hi;
       var en = s.kind === 'story' ? s.ch.title_en : s.ev.title_en;
       var when = s.kind === 'story' ? s.ch.when : whenText(s.ev);
-      html += '<div class="mi" data-i="' + i + '"><div class="mw">' + esc(when) +
-        (s.kind === 'story' ? ' <span class="st">STORY</span>' : '') + '</div><div class="mh">' + esc(hi) +
+      html += '<div class="mi' + (s.kind === 'story' ? '' : ' soon') + '" data-i="' + i + '"><div class="mw">' + esc(when) +
+        (s.kind === 'story' ? ' <span class="st">STORY</span>' : ' <span class="sc">STORY COMING</span>') + '</div><div class="mh">' + esc(hi) +
         '</div><div class="me">' + esc(en) + '</div></div>';
     });
     $('mlist').innerHTML = html;
@@ -247,7 +255,7 @@
     var items = menuItems();
     focusIdx = Math.max(0, Math.min(items.length - 1, i));
     for (var j = 0; j < items.length; j++) {
-      items[j].className = 'mi' + (j === focusIdx ? ' focus' : '') + (j === current ? ' now' : '');
+      items[j].className = 'mi' + (scenes[j].kind === 'story' ? '' : ' soon') + (j === focusIdx ? ' focus' : '') + (j === current ? ' now' : '');
     }
     // keep the highlighted item in view (old browsers: adjust scrollTop by hand)
     var box = $('mlist'), el = items[focusIdx];
@@ -278,7 +286,9 @@
       ev.preventDefault();
       if (k === 38) focusItem(focusIdx - 1);                 // Up
       else if (k === 40) focusItem(focusIdx + 1);            // Down
-      else if (ok) { closeMenu(false); play(focusIdx); }     // OK: play the highlighted moment
+      else if (ok) {                                         // OK: play the highlighted story
+        if (scenes[focusIdx].kind === 'story') { closeMenu(false); play(focusIdx); } else badge('Story coming');
+      }
       else if (k === 37 || k === 461) closeMenu(true);       // Left / Back: close, carry on
       return;
     }
@@ -289,14 +299,17 @@
     }
     if (k === 38 || k === 40) { ev.preventDefault(); openMenu(); return; }   // Up / Down: menu
     if (k === 39) { ev.preventDefault(); if (mode === 'playing') { badge('Next ▶'); next(); } return; }
-    if (k === 37) { ev.preventDefault(); if (mode === 'playing' && current > 0) { badge('◀ Previous'); play(current - 1); } return; }
+    if (k === 37) { ev.preventDefault(); var pv = storyFrom(current - 1, -1); if (mode === 'playing' && pv >= 0) { badge('◀ Previous'); play(pv); } return; }
   });
   // the Magic Remote pointer: click a menu item to play it; elsewhere a click acts like OK
   document.addEventListener('click', function (ev) {
     var t = ev.target;
     while (t && t !== document.body && !(t.className && /\bmi\b/.test(t.className))) t = t.parentNode;
     if (menuOpen) {
-      if (t && t !== document.body) { closeMenu(false); play(+t.getAttribute('data-i')); }
+      if (t && t !== document.body) {
+        var ci = +t.getAttribute('data-i');
+        if (scenes[ci].kind === 'story') { closeMenu(false); play(ci); } else badge('Story coming');
+      }
       else closeMenu(true);
       return;
     }

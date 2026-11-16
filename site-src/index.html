@@ -166,6 +166,9 @@
   .item .e { font: 500 19px/1.3 var(--en); color: var(--ink-soft); }
   .kind { font: 600 9px/1 var(--ui); letter-spacing: .12em; padding: 3px 6px; border-radius: 3px; }
   .kind.story { background: var(--amber); color: #1b130a; }
+  .kind.soon { border: 1px solid currentColor; opacity: .8; }
+  .item.soon { opacity: .42; cursor: default; }
+  .item.soon:hover { background: none; }
 
   /* small screens */
   @media (max-width: 640px) {
@@ -267,11 +270,14 @@
 
   // ------------------------------------------------ moments, in date order
   // A story (film) stands in for the events it covers; every other event plays from its recording.
+  // Moments without a story yet stay in the menu (greyed out, "story coming") but are not playable:
+  // only stories are played, stepped through and auto-advanced.
   const covered = new Set(A.chapters.flatMap(c => c.event_ids));
-  const scenes = [];
-  A.events.forEach(e => { if (!covered.has(e.id) && e.sources?.length) scenes.push({ kind: "voice", id: e.id, year: e.year, ev: e }); });
-  A.chapters.forEach(c => scenes.push({ kind: "story", id: c.id, year: c.year, ch: c }));
-  scenes.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || (a.kind === "story" ? -1 : 1));
+  const listed = [];
+  A.events.forEach(e => { if (!covered.has(e.id) && e.sources?.length) listed.push({ kind: "voice", id: e.id, year: e.year, ev: e }); });
+  A.chapters.forEach(c => listed.push({ kind: "story", id: c.id, year: c.year, ch: c }));
+  listed.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || (a.kind === "story" ? -1 : 1));
+  const scenes = listed.filter(s => s.kind === "story");
   const sceneIndex = id => scenes.findIndex(s => s.id === id);
   const firstStory = scenes.findIndex(s => s.kind === "story"); // "the beginning" = the first story
   const whenText = (year, basis, yearEnd) => !year ? "Date not known"
@@ -283,20 +289,19 @@
   $("people").innerHTML = A.people.map(p =>
     `<span class="chip ${p.status === "recorded" ? "on" : ""}">${esc(p.name_en)}${p.status !== "recorded" ? " · soon" : ""}</span>`).join("");
   const byDecade = {};
-  scenes.forEach((s, i) => { const d = s.year ? Math.floor(s.year / 10) * 10 + "s" : "Date not known"; (byDecade[d] ||= []).push(i); });
-  $("timeline").innerHTML = Object.entries(byDecade).map(([dec, idxs]) => `<section class="decade"><h3>${dec}</h3><div class="list">${
-    idxs.map(i => {
-      const s = scenes[i];
+  listed.forEach(s => { const d = s.year ? Math.floor(s.year / 10) * 10 + "s" : "Date not known"; (byDecade[d] ||= []).push(s); });
+  $("timeline").innerHTML = Object.entries(byDecade).map(([dec, items]) => `<section class="decade"><h3>${dec}</h3><div class="list">${
+    items.map(s => {
       if (s.kind === "story") {
         const c = s.ch;
-        return `<button class="item" data-i="${i}"><span class="dot"></span>
+        return `<button class="item" data-i="${scenes.indexOf(s)}"><span class="dot"></span>
           <div class="when">${esc(c.when)} <span class="kind story">STORY · ${fmt(c.duration)}</span></div>
           <div class="h">${esc(c.title_hi)}</div><div class="e">${esc(c.title_en)}</div></button>`;
       }
       const e = s.ev, cls = e.date_basis === "stated" ? "" : (e.year ? "approx" : "unknown");
-      return `<button class="item ${cls}" data-i="${i}"><span class="dot"></span>
-        <div class="when">${whenText(e.year, e.date_basis, e.year_end)}</div>
-        <div class="h">${esc(e.title_hi)}</div><div class="e">${esc(e.title_en)}</div></button>`;
+      return `<div class="item soon ${cls}" aria-disabled="true" title="Story coming"><span class="dot"></span>
+        <div class="when">${whenText(e.year, e.date_basis, e.year_end)} <span class="kind soon">STORY COMING</span></div>
+        <div class="h">${esc(e.title_hi)}</div><div class="e">${esc(e.title_en)}</div></div>`;
     }).join("")}</div></section>`).join("");
   // real photographs
   const photoById = Object.fromEntries((A.photos || []).map(p => [p.id, p]));
@@ -414,7 +419,7 @@
   $("again").onclick = () => { $("end").hidden = true; playScene(firstStory >= 0 ? firstStory : 0); };
 
   menu.addEventListener("click", ev => {
-    const it = ev.target.closest(".item"); if (it) { enterFS(); playScene(+it.dataset.i); }
+    const it = ev.target.closest(".item"); if (it && !it.classList.contains("soon")) { enterFS(); playScene(+it.dataset.i); }
   });
 
   $("pp").onclick = () => audio.paused ? audio.play() : audio.pause();
@@ -482,7 +487,7 @@
   });
 
   // ------------------------------------------------ start screen
-  $("startBy").textContent = `${scenes.length} moments from ${A.recordings.length} conversations`;
+  $("startBy").textContent = `${scenes.length} stories from ${A.recordings.length} conversations`;
   $("go").onclick = () => { enterFS(); playScene(firstStory >= 0 ? firstStory : 0); };
 
   // a shared link (#moment-id) or where you left off last time
