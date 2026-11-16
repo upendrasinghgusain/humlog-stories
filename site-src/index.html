@@ -150,6 +150,8 @@
   .people { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
   .chip { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); font-size: 14px; color: var(--ink-faint); }
   .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+  button.chip { cursor: pointer; font: inherit; font-size: 14px; background: none; }
+  button.chip:not(.on):hover { color: var(--ink); border-color: var(--ink-soft); }
 
   .decade h3 { font: 500 30px/1 var(--en); color: var(--ink-faint); padding: 24px 18px 8px 46px; }
   .list { position: relative; }
@@ -210,7 +212,7 @@
     <div class="photo-tag" id="startPhotoTag" hidden></div>
     <div>
       <h2>हम लोग</h2>
-      <div class="en">Dad, in his own voice</div>
+      <div class="en" id="startWho">Dad, in his own voice</div>
       <div class="by" id="startBy"></div>
       <button class="go" id="go"><svg viewBox="0 0 14 14"><path d="M2 1l11 6-11 6z"/></svg>Play from the beginning</button>
       <button class="resume" id="resume" hidden></button>
@@ -272,22 +274,29 @@
   // A story (film) stands in for the events it covers; every other event plays from its recording.
   // Moments without a story yet stay in the menu (greyed out, "story coming") but are not playable:
   // only stories are played, stepped through and auto-advanced.
+  // Each person has their own timeline: Dad's (his stories and the moments still to come) or Mum's.
   const covered = new Set(A.chapters.flatMap(c => c.event_ids));
-  const listed = [];
-  A.events.forEach(e => { if (!covered.has(e.id) && e.sources?.length) listed.push({ kind: "voice", id: e.id, year: e.year, ev: e }); });
-  A.chapters.forEach(c => listed.push({ kind: "story", id: c.id, year: c.year, ch: c }));
-  listed.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || (a.kind === "story" ? -1 : 1));
-  const scenes = listed.filter(s => s.kind === "story");
+  const personOf = c => c.person || "dad";
+  let who = "dad", listed = [], scenes = [], firstStory = -1;
+  function buildScenes() {
+    listed = [];
+    if (who === "dad") A.events.forEach(e => { if (!covered.has(e.id) && e.sources?.length) listed.push({ kind: "voice", id: e.id, year: e.year, ev: e }); });
+    A.chapters.filter(c => personOf(c) === who).forEach(c => listed.push({ kind: "story", id: c.id, year: c.year, ch: c }));
+    listed.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || (a.kind === "story" ? -1 : 1));
+    scenes = listed.filter(s => s.kind === "story");
+    firstStory = scenes.length ? 0 : -1; // "the beginning" = the first story
+  }
   const sceneIndex = id => scenes.findIndex(s => s.id === id);
-  const firstStory = scenes.findIndex(s => s.kind === "story"); // "the beginning" = the first story
   const whenText = (year, basis, yearEnd) => !year ? "Date not known"
     : (basis === "stated" ? "" : "c. ") + year + (yearEnd && yearEnd !== year ? "–" + yearEnd : "");
   const titleHi = s => s.kind === "story" ? s.ch.title_hi : s.ev.title_hi;
   const titleEn = s => s.kind === "story" ? s.ch.title_en : s.ev.title_en;
 
   // ------------------------------------------------ menu
-  $("people").innerHTML = A.people.map(p =>
-    `<span class="chip ${p.status === "recorded" ? "on" : ""}">${esc(p.name_en)}${p.status !== "recorded" ? " · soon" : ""}</span>`).join("");
+  function renderMenu() {
+  $("people").innerHTML = A.people.map(p => p.status === "recorded"
+    ? `<button class="chip ${p.id === who ? "on" : ""}" data-who="${esc(p.id)}">${esc(p.name_en)}</button>`
+    : `<span class="chip">${esc(p.name_en)} · soon</span>`).join("");
   const byDecade = {};
   listed.forEach(s => { const d = s.year ? Math.floor(s.year / 10) * 10 + "s" : "Date not known"; (byDecade[d] ||= []).push(s); });
   $("timeline").innerHTML = Object.entries(byDecade).map(([dec, items]) => `<section class="decade"><h3>${dec}</h3><div class="list">${
@@ -303,6 +312,7 @@
         <div class="when">${whenText(e.year, e.date_basis, e.year_end)} <span class="kind soon">STORY COMING</span></div>
         <div class="h">${esc(e.title_hi)}</div><div class="e">${esc(e.title_en)}</div></div>`;
     }).join("")}</div></section>`).join("");
+  }
   // real photographs
   const photoById = Object.fromEntries((A.photos || []).map(p => [p.id, p]));
   const photoTag = p => `Photograph · ${p.date}${p.edits && p.edits !== "unedited" ? " · " + p.edits.split(",").slice(-2)[0].trim() : ""}`;
@@ -313,7 +323,8 @@
     $(slot).hidden = false; $(tag).hidden = false;
   }
   const usePhoto = use => (A.photos || []).find(p => (p.use || []).includes(use));
-  showPhoto("startPhoto", "startPhotoTag", usePhoto("start"));
+  const startPhotoFor = () => who === "mum" ? photoById["mum-sinala"] : usePhoto("start");
+  const endPhotoFor = () => who === "mum" ? photoById["mum-dad-today"] : usePhoto("end");
 
   function openMenu() {
     menu.classList.add("open"); scrim.classList.add("show"); $("menuBtn").setAttribute("aria-expanded", "true");
@@ -414,7 +425,7 @@
     if (current < scenes.length - 1) return playScene(current + 1);
     // after the last moment: a quiet closing screen with Dad today
     stopAll(); $("end").hidden = false; highlight(null); setWhere("Humlog", "हम लोग");
-    showPhoto("endPhoto", "endPhotoTag", usePhoto("end"));
+    showPhoto("endPhoto", "endPhotoTag", endPhotoFor());
   }
   $("again").onclick = () => { $("end").hidden = true; playScene(firstStory >= 0 ? firstStory : 0); };
 
@@ -486,19 +497,38 @@
     if (ev.data?.type === "chapter-ended") setTimeout(next, 1500);
   });
 
-  // ------------------------------------------------ start screen
-  $("startBy").textContent = `${scenes.length} stories from ${A.recordings.length} conversations`;
+  // ------------------------------------------------ start screen (per person)
   $("go").onclick = () => { enterFS(); playScene(firstStory >= 0 ? firstStory : 0); };
-
-  // a shared link (#moment-id) or where you left off last time
-  const linked = sceneIndex(location.hash.slice(1));
-  const last = sceneIndex(store.get("lastScene") || "");
-  const offer = linked >= 0 ? linked : (last > 0 ? last : -1);
-  if (offer >= 0) {
-    $("resume").hidden = false;
-    $("resume").textContent = (linked >= 0 ? "Play the shared moment: " : "Continue where you left off: ") + titleEn(scenes[offer]);
-    $("resume").onclick = () => { enterFS(); playScene(offer); };
+  function showStart(linkedId) {
+    const person = A.people.find(p => p.id === who);
+    $("startWho").textContent = who === "mum" ? "Mum, in her own voice" : "Dad, in his own voice";
+    const convs = new Set(A.chapters.filter(c => personOf(c) === who).map(c => c.recording)).size;
+    $("startBy").textContent = `${scenes.length} ${scenes.length === 1 ? "story" : "stories"} from ${convs} ${convs === 1 ? "conversation" : "conversations"}`;
+    showPhoto("startPhoto", "startPhotoTag", startPhotoFor());
+    // a shared link (#story-id) or where you left off last time
+    const linked = sceneIndex(linkedId || "");
+    const last = sceneIndex(store.get("lastScene") || "");
+    const offer = linked >= 0 ? linked : (last > 0 ? last : -1);
+    $("resume").hidden = offer < 0;
+    if (offer >= 0) {
+      $("resume").textContent = (linked >= 0 ? "Play the shared moment: " : "Continue where you left off: ") + titleEn(scenes[offer]);
+      $("resume").onclick = () => { enterFS(); playScene(offer); };
+    }
   }
+  function setPerson(p, linkedId) {
+    who = p; store.set("who", p);
+    buildScenes(); renderMenu();
+    stopAll(); current = -1; highlight(null); setWhere("Humlog", "हम लोग");
+    frame.hidden = true; $("voice").hidden = true; $("end").hidden = true; $("start").hidden = false;
+    showStart(linkedId);
+  }
+  $("people").addEventListener("click", ev => {
+    const b = ev.target.closest("button.chip"); if (b && b.dataset.who !== who) setPerson(b.dataset.who);
+  });
+  // open on the person a shared link belongs to, else whoever was viewed last
+  const hash = location.hash.slice(1), linkedCh = A.chapters.find(c => c.id === hash);
+  const savedWho = store.get("who");
+  setPerson(linkedCh ? personOf(linkedCh) : (A.people.some(p => p.id === savedWho && p.status === "recorded") ? savedWho : "dad"), hash);
 })();
 </script>
 </body>

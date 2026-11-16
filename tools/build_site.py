@@ -30,7 +30,7 @@ DERIVED = ROOT / "archive" / "derived"
 
 PEOPLE = [
     {"id": "dad", "name_en": "Dad", "name_hi": "पापा", "status": "recorded"},
-    {"id": "mum", "name_en": "Mum", "name_hi": "मम्मी", "status": "coming"},
+    {"id": "mum", "name_en": "Mum", "name_hi": "मम्मी", "status": "recorded"},
     {"id": "dadi", "name_en": "Dadi", "name_hi": "दादी", "status": "coming"},
 ]
 NOTE = ("Draft. Transcripts, translations and dates are AI drafts that the family has not yet checked. "
@@ -103,13 +103,19 @@ def main() -> None:
     recordings = []
     for n, f in enumerate(sorted(DERIVED.glob("REC-*/transcript.gemini-pro-latest.chunked.json")), 1):
         rec_id = f.parent.name
+        if rec_id.startswith("REC-MUM"):
+            # Mum's full interviews are never published: they include passages the family chose to leave
+            # out. Her stories carry their own edited audio.
+            stale = SITE / "media" / f"{rec_id}.m4a"
+            stale.unlink(missing_ok=True)
+            continue
         tr = json.loads(f.read_text(encoding="utf-8"))
         src = originals[tr["source"]["file"]]
         web = SITE / "media" / f"{rec_id}.m4a"
         if newer(src, web):  # mono speech copy, small and quick to seek
             run("-i", src, "-ac", "1", "-c:a", "aac", "-b:a", "80k", "-movflags", "+faststart", web)
         recordings.append({
-            "id": rec_id, "title": f"Interview {n}", "person": "Dad", "file": f"media/{rec_id}.m4a",
+            "id": rec_id, "title": f"Interview {n}", "person": "mum" if "MUM" in rec_id else "dad", "file": f"media/{rec_id}.m4a",
             "duration": duration(web),
             "segments": [{k: s[k] for k in ("start", "end", "speaker", "text_hi", "text_en")} for s in tr["segments"]],
         })
@@ -132,6 +138,9 @@ def main() -> None:
         if cfg.get("draft") and not drafts:
             shutil.rmtree(SITE / "chapters" / folder.name, ignore_errors=True)
             print(f"  skipping draft chapter {folder.name}")
+            continue
+        if not (folder / "story.js").exists():
+            print(f"  skipping {folder.name}: not built yet (run tools/build_story.py)")
             continue
         story = json.loads(re.search(r"\{.*\}", (folder / "story.js").read_text(encoding="utf-8"), re.S)[0])
         out = SITE / "chapters" / folder.name
@@ -168,6 +177,7 @@ def main() -> None:
             "title_en": cfg["title_en"], "year": cfg.get("year"), "when": cfg.get("when", ""),
             "image": f"chapters/{folder.name}/" + renames.get(cfg.get("thumb", ""), "images/01-village.jpg"),
             "duration": duration(folder / "audio.m4a"), "event_ids": covers,
+            "person": cfg.get("person", "Dad").lower(), "recording": cfg["recording_id"],
         })
 
     # ---- real photographs (prepared by tools/photos.py)

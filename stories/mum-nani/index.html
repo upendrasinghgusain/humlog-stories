@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Humlog Stories</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tiro+Devanagari+Hindi&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500&display=swap">
+<style>
+  :root {
+    --ink: #f3ede2;
+    --ink-soft: rgba(243, 237, 226, .72);
+    --ink-faint: rgba(243, 237, 226, .45);
+    --bg: #0d0b09;
+    --amber: #d9a45b;
+    --hi: "Tiro Devanagari Hindi", "Nirmala UI", "Mangal", serif;
+    --en: "Cormorant Garamond", Georgia, serif;
+    --ui: "Inter", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
+  body { font-family: var(--ui); }
+
+  /* ---------- stage ---------- */
+  .stage { position: fixed; inset: 0; }
+  /* Paintings sit like watercolours on paper in the upper part; words live below them. */
+  .frame {
+    position: absolute; top: 5vh; bottom: 38vh; left: 4vw; right: 4vw; z-index: 0;
+    background-size: contain; background-position: center; background-repeat: no-repeat;
+    opacity: 0; transition: opacity 3.2s ease;
+    filter: sepia(.08) brightness(.9) drop-shadow(0 20px 50px rgba(0,0,0,.6));
+  }
+  .frame .pic { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .frame.on { opacity: 1; animation: drift 30s ease-out forwards; }
+  @keyframes drift {
+    from { transform: scale(1.0); }
+    to   { transform: scale(1.045); }
+  }
+  /* Panorama: a wide band across the frame that glides slowly from one end to the other */
+  .frame.pan { animation: none !important; overflow: hidden; }
+  .frame.pan .pic { position: absolute; left: 0; top: 50%; width: auto; height: 64%; max-width: none; object-fit: fill;
+                    transform: translate(0, -50%); box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+  .frame.pan.on .pic { animation: pan var(--dur, 12s) ease-in-out .6s forwards; }
+  @keyframes pan { from { transform: translate(var(--x0, 0px), -50%); } to { transform: translate(var(--x1, 0px), -50%); } }
+  /* Pointer on a photograph ("this is who it is"): ring, line, label, revealed a moment after the photo */
+  .pointer { position: absolute; pointer-events: none; }
+  .pointer svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .pointer circle { fill: none; stroke: #f0d6ae; stroke-width: 2.5; opacity: 0;
+                    transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 6px rgba(0,0,0,.7)); }
+  .pointer line { stroke: #f0d6ae; stroke-width: 1.8; stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+                  filter: drop-shadow(0 0 4px rgba(0,0,0,.8)); }
+  .pointer .lab { position: absolute; transform: translateY(-50%); opacity: 0; white-space: nowrap;
+                  background: rgba(22,16,10,.72); border: 1px solid rgba(240,214,174,.45); border-radius: 4px;
+                  padding: 6px 12px 7px; text-align: left; }
+  .pointer .lab b { display: block; font: 600 min(clamp(18px, 2.2vw, 28px), 3.6vh)/1.2 var(--hi); color: #f6ead6; }
+  .pointer .lab small { display: block; font: 500 min(clamp(12px, 1.2vw, 15px), 2.2vh)/1.3 var(--ui);
+                        letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+  .frame.on .pointer .ring { animation: ptrIn 1s ease-out 1.6s forwards; }
+  .frame.on .pointer .pulse { animation: ptrPulse 2.6s ease-out 2.6s 4; }
+  .frame.on .pointer line { animation: ptrDraw .8s ease-out 2.4s forwards; }
+  .frame.on .pointer .lab { animation: ptrLab .9s ease-out 3.0s forwards; }
+  @keyframes ptrIn { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }
+  @keyframes ptrPulse { from { opacity: .8; transform: scale(1); } to { opacity: 0; transform: scale(1.5); } }
+  @keyframes ptrDraw { to { stroke-dashoffset: 0; } }
+  @keyframes ptrLab { from { opacity: 0; transform: translate(-6px, -50%); } to { opacity: 1; transform: translate(0, -50%); } }
+  .vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 30%, rgba(217,164,91,.06) 0%, transparent 60%);
+  }
+  @media (max-aspect-ratio: 4/5) {
+    .frame { top: 8vh; bottom: 48vh; left: 2vw; right: 2vw; }
+    .mapcard { width: min(100%, 78vh); }
+  }
+
+  /* Map frames: an old paper map card in the same place as the paintings */
+  .frame.map { filter: none; animation: none !important; display: grid; place-items: center; }
+  .mapcard {
+    position: relative;
+    /* 16:9 card that fits the frame both ways: frame is 57vh tall (landscape), 44vh (portrait) */
+    width: min(100%, 101vh); aspect-ratio: 16 / 9;
+    background: #ece3d0; padding: 1.2%; border-radius: 3px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.6);
+  }
+  .mapcard .m { width: 100%; height: 100%; filter: sepia(.45) saturate(.75) contrast(.95) brightness(.97); }
+  .maplibregl-ctrl-attrib { font-size: 9px; opacity: .6; }
+  .pin { display: flex; align-items: center; gap: 7px; transform: translateY(-1px); pointer-events: none; }
+  .pin i { width: 9px; height: 9px; border-radius: 50%; background: #7a3b1b; box-shadow: 0 0 0 3px rgba(236,227,208,.9); }
+  .pin.approx i { background: transparent; border: 2px dashed #7a3b1b; width: 16px; height: 16px; box-shadow: none; }
+  .pin.minor i { background: #6b6152; width: 6px; height: 6px; }
+  .pin span {
+    background: rgba(239, 231, 214, .9); padding: 3px 8px 4px; border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(60, 40, 20, .25);
+  }
+  .pin b { display: block; font: 700 clamp(14px, 1.3vw, 18px)/1.1 var(--en); color: #2a1c10; letter-spacing: .02em; }
+  .pin small { display: block; font: 500 11px/1.3 var(--ui); color: #7a3b1b; letter-spacing: .04em; }
+  .pin.minor span { background: rgba(239, 231, 214, .7); box-shadow: none; padding: 1px 6px; }
+  .pin.minor b { font-weight: 500; font-size: 13px; color: #4d4436; }
+  .legend {
+    position: absolute; top: 4%; right: 3%; z-index: 2; min-width: 180px;
+    background: rgba(239, 231, 214, .93); border: 1px solid rgba(90, 70, 48, .25); border-radius: 3px;
+    padding: 10px 12px; color: #3a2a1c; font: 400 11px/1.5 var(--ui);
+    box-shadow: 0 2px 10px rgba(60, 40, 20, .15);
+  }
+  .legend h4 { font: 600 15px/1.2 var(--en); margin-bottom: 6px; color: #2c1f14; }
+  .legend .li { display: flex; align-items: center; gap: 8px; color: #5c4a36; }
+  .legend .km { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(90,70,48,.2); font-weight: 500; color: #7a3b1b; }
+  .sw { width: 22px; height: 10px; flex: none; position: relative; }
+  .sw.solid::after, .sw.dash::after { content: ""; position: absolute; left: 0; right: 0; top: 4px; border-top: 2.5px solid #8a3d17; }
+  .sw.dash::after { border-top-style: dashed; }
+  .sw.dot::after { content: ""; position: absolute; left: 7px; top: 1px; width: 8px; height: 8px; border-radius: 50%; background: #7a3b1b; }
+  .sw.ring::after { content: ""; position: absolute; left: 5px; top: -1px; width: 10px; height: 10px; border-radius: 50%; border: 1.5px dashed #7a3b1b; }
+  .maplibregl-ctrl-scale { background: rgba(239,231,214,.85); border-color: #5c4a36; color: #3a2a1c; font: 10px var(--ui); }
+  @media (max-width: 600px) { .legend { min-width: 0; padding: 6px 8px; font-size: 10px; } .legend h4 { font-size: 13px; } }
+  .tag {
+    position: absolute; top: calc(62vh - 34px); right: max(16px, 4vw);
+    font: 500 11px/1 var(--ui); letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-faint); padding: 6px 10px; border: 1px solid rgba(243,237,226,.18);
+    border-radius: 999px; backdrop-filter: blur(4px); opacity: 0; transition: opacity 1s;
+    z-index: 3; background: rgba(14,11,8,.72); max-width: min(60vw, 560px);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .playing .tag { opacity: 1; }
+
+  /* ---------- captions ---------- */
+  .captions {
+    position: absolute; left: 0; right: 0; top: 63vh; bottom: 76px; overflow: hidden;
+    padding: 0 max(16px, 8vw); text-align: center;
+    display: flex; flex-direction: column; justify-content: flex-start; align-items: center;
+  }
+  @media (max-aspect-ratio: 4/5) { .captions { top: 54vh; } }
+  .line { transition: opacity .7s ease, transform .7s ease; max-width: 44rem; }
+  .line.out { opacity: 0; transform: translateY(6px); }
+  .who {
+    font: 500 10px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 12px; opacity: .85;
+  }
+  .hi {
+    font-family: var(--hi); font-size: min(clamp(20px, 2.8vw, 34px), 4.2vh); line-height: 1.5;
+    text-shadow: 0 2px 18px rgba(0,0,0,.6);
+  }
+  .en {
+    font-family: var(--en); font-style: italic; font-size: min(clamp(16px, 1.8vw, 22px), 2.9vh);
+    line-height: 1.35; color: var(--ink-soft); margin-top: 8px;
+    text-shadow: 0 2px 14px rgba(0,0,0,.7);
+  }
+  .line.interviewer .hi { font-size: clamp(17px, 2.1vw, 23px); color: var(--ink-soft); }
+  .line.interviewer .en { font-size: clamp(15px, 1.6vw, 18px); color: var(--ink-faint); }
+  .line.interviewer .who { color: var(--ink-faint); }
+  .unclear { border-bottom: 1px dotted var(--amber); color: #f0d6ae; }
+  /* Narration cards: quieter, clearly not Dad's words */
+  .line.card-line { padding-top: 22px; }
+  .line.card-line .who { color: var(--ink-faint); }
+  .line.card-line .hi { font-size: clamp(17px, 2vw, 22px); color: var(--ink-soft); font-style: italic; }
+  .line.card-line .en { font-family: var(--ui); font-style: normal; font-size: 12px; letter-spacing: .14em;
+                        text-transform: uppercase; color: var(--amber); opacity: .8; }
+  .hide-en .en { display: none; }
+
+  /* ---------- controls ---------- */
+  .bar {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 18px max(16px, 4vw) 22px;
+    display: flex; align-items: center; gap: 16px;
+    opacity: 0; transition: opacity .8s;
+  }
+  .playing .bar, .paused .bar, .ended .bar { opacity: 1; }
+  .btn {
+    background: none; border: 1px solid rgba(243,237,226,.25); color: var(--ink);
+    width: 40px; height: 40px; border-radius: 50%; cursor: pointer; flex: none;
+    display: grid; place-items: center;
+  }
+  .btn:hover { border-color: var(--ink-soft); }
+  .btn svg { width: 14px; height: 14px; fill: currentColor; }
+  .pill {
+    background: none; border: 1px solid rgba(243,237,226,.2); color: var(--ink-soft);
+    font: 500 11px/1 var(--ui); letter-spacing: .08em; padding: 8px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .pill[aria-pressed="true"] { color: var(--bg); background: var(--ink-soft); }
+  .track { position: relative; flex: 1; height: 26px; cursor: pointer; }
+  .track::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 2px;
+    background: rgba(243,237,226,.18); border-radius: 2px;
+  }
+  .fill { position: absolute; left: 0; top: 12px; height: 2px; background: var(--amber); border-radius: 2px; width: 0; }
+  .beat {
+    position: absolute; top: 8px; width: 2px; height: 10px; background: rgba(243,237,226,.5);
+  }
+  .beat span {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    font: 400 10px/1.2 var(--ui); color: var(--ink-faint); white-space: nowrap;
+    opacity: 0; transition: opacity .3s; pointer-events: none;
+  }
+  .track:hover .beat span { opacity: 1; }
+  .time { font: 400 12px/1 var(--ui); color: var(--ink-faint); font-variant-numeric: tabular-nums; min-width: 84px; text-align: right; }
+
+  /* ---------- title & end cards ---------- */
+  .card {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    padding: 24px; background: rgba(13, 11, 9, .82); z-index: 5;
+    transition: opacity 2s ease;
+  }
+  .card.gone { opacity: 0; pointer-events: none; }
+  .card .place {
+    font: 500 11px/1 var(--ui); letter-spacing: .28em; text-transform: uppercase; color: var(--amber);
+  }
+  .card h1 {
+    font-family: var(--hi); font-weight: 400; font-size: clamp(40px, 7vw, 76px); line-height: 1.3; margin: 22px 0 6px;
+  }
+  .card .sub { font-family: var(--en); font-style: italic; font-size: clamp(20px, 2.6vw, 28px); color: var(--ink-soft); }
+  .card .by { font-family: var(--en); font-size: 18px; color: var(--ink-faint); margin-top: 26px; }
+  .listen {
+    margin-top: 40px; background: none; color: var(--ink); cursor: pointer;
+    border: 1px solid rgba(243,237,226,.35); border-radius: 999px; padding: 14px 28px;
+    font: 500 13px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase;
+    display: inline-flex; gap: 12px; align-items: center;
+  }
+  .listen:hover { background: rgba(243,237,226,.08); }
+  .listen svg { width: 12px; height: 12px; fill: currentColor; }
+  .card .note { margin-top: 28px; font: 400 12px/1.6 var(--ui); color: var(--ink-faint); max-width: 30rem; }
+
+  .end blockquote {
+    font-family: var(--hi); font-size: clamp(24px, 3.4vw, 38px); line-height: 1.6; max-width: 40rem;
+  }
+  .end .en-q { font-family: var(--en); font-style: italic; font-size: clamp(18px, 2.2vw, 24px); color: var(--ink-soft); margin-top: 14px; }
+  .end .src { margin-top: 40px; font: 400 12px/1.8 var(--ui); color: var(--ink-faint); }
+
+  /* ---------- transcript drawer ---------- */
+  .drawer {
+    position: absolute; top: 0; right: 0; bottom: 0; width: min(440px, 100%);
+    background: rgba(13,11,9,.94); border-left: 1px solid rgba(243,237,226,.1);
+    transform: translateX(100%); transition: transform .5s ease; overflow-y: auto; padding: 28px 24px 120px;
+  }
+  .drawer.open { transform: none; }
+  .drawer h2 { font: 500 11px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--amber); margin-bottom: 20px; }
+  .drawer .row { padding: 12px 10px; border-radius: 8px; cursor: pointer; display: grid; grid-template-columns: 44px 1fr; gap: 10px; }
+  .drawer .row:hover { background: rgba(243,237,226,.05); }
+  .drawer .row.now { background: rgba(217,164,91,.12); }
+  .drawer .t { font: 400 11px/1.9 var(--ui); color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .drawer .rh { font-family: var(--hi); font-size: 17px; line-height: 1.6; }
+  .drawer .re { font-family: var(--en); font-style: italic; font-size: 16px; color: var(--ink-soft); }
+  .drawer .row.interviewer .rh { color: var(--ink-soft); font-size: 15px; }
+  .drawer .close { position: absolute; top: 18px; right: 18px; }
+
+  @media (max-width: 600px) {
+    .time { display: none; }
+    .tag { display: none; }
+  }
+  /* ?video=1 : clean frame for rendering an MP4 */
+  .video .bar, .video #again, .video #listen { display: none !important; }
+  .video, .video * { cursor: none !important; }
+  .credit { margin-top: 18px; font: 400 12px/1.6 var(--ui); color: var(--ink-faint); letter-spacing: .06em; }
+  @media (prefers-reduced-motion: reduce) {
+    .frame.on { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div id="frames"></div>
+  <div class="vignette"></div>
+  <div class="tag" id="tag">Illustration · imagined scene</div>
+
+  <div class="captions" id="captions"></div>
+
+  <div class="bar">
+    <button class="btn" id="toggle" aria-label="Play or pause">
+      <svg id="icon" viewBox="0 0 14 14"><path d="M2 1l11 6-11 6z"/></svg>
+    </button>
+    <div class="track" id="track"><div class="fill" id="fill"></div></div>
+    <span class="time" id="time">0:00 / 0:00</span>
+    <button class="pill" id="musicBtn" aria-pressed="true" title="Background music">Music</button>
+    <button class="pill" id="enBtn" aria-pressed="true" title="Show English">EN</button>
+    <button class="pill" id="txBtn" title="Full transcript">Transcript</button>
+  </div>
+
+  <div class="card" id="intro">
+    <div>
+      <div class="place" id="introPlace"></div>
+      <h1 id="introTitle"></h1>
+      <div class="sub" id="introSub"></div>
+      <div class="by" id="introBy"></div>
+      <button class="listen" id="listen"><svg viewBox="0 0 14 14"><path d="M2 1l11 6-11 6z"/></svg>Listen</button>
+      <p class="note" id="introNote"></p>
+    </div>
+  </div>
+
+  <div class="card end gone" id="end">
+    <div>
+      <blockquote id="endQuote"></blockquote>
+      <div class="en-q" id="endQuoteEn"></div>
+      <div class="src" id="endSrc"></div>
+      <div class="credit" id="endCredit"></div>
+      <button class="listen" id="again"><svg viewBox="0 0 14 14"><path d="M2 1l11 6-11 6z"/></svg>Listen again</button>
+    </div>
+  </div>
+
+  <aside class="drawer" id="drawer" aria-label="Transcript">
+    <button class="btn close" id="closeTx" aria-label="Close transcript">✕</button>
+    <h2>Transcript</h2>
+    <div id="rows"></div>
+  </aside>
+</div>
+
+<audio id="audio" preload="auto"></audio>
+<audio id="music" preload="auto"></audio>
+<script src="story.js"></script>
+<script>
+(() => {
+  const S = window.STORY;
+  const $ = id => document.getElementById(id);
+  const audio = $("audio"), stage = $("stage");
+  audio.src = S.audio;
+
+  // ---- intro / end text
+  $("introPlace").textContent = S.place;
+  document.title = S.title_hi + " · " + S.title_en;
+  $("introTitle").textContent = S.title_hi;
+  $("introSub").textContent = S.title_en;
+  $("introBy").textContent = S.byline;
+  $("introNote").textContent = S.note;
+  $("endQuote").textContent = S.quote.hi;
+  $("endQuoteEn").textContent = S.quote.en;
+  $("endSrc").innerHTML = S.source;
+  $("endCredit").textContent = S.credit || "";
+  const VIDEO = new URLSearchParams(location.search).has("video");
+  if (VIDEO) document.body.classList.add("video");
+
+  // ---- maps
+  const P = S.places || {};
+  const ll = p => [P[p].lon, P[p].lat];
+  function curve(a, b, n = 90, bend = 0.18) {
+    // gentle hand-drawn arc between two points
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const c = [mx - dy * bend, my + dx * bend];
+    return Array.from({ length: n + 1 }, (_, i) => {
+      const t = i / n, u = 1 - t;
+      return [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]];
+    });
+  }
+  function makeMap(el, spec) {
+    if (!window.maplibregl) { el.innerHTML = '<p style="color:#6b5a45;padding:2em;font:14px var(--ui)">Map needs an internet connection.</p>'; return null; }
+    const map = new maplibregl.Map({
+      container: el, style: "https://tiles.openfreemap.org/styles/positron",
+      center: ll(spec.from), zoom: spec.zoom + 1.6, interactive: false, attributionControl: { compact: true },
+      fadeDuration: 0,
+    });
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 110, unit: "metric" }), "bottom-left");
+    const handle = { map, spec, ready: false };
+    // legend card
+    const km = haversine(ll(spec.from), ll(spec.to));
+    const lg = document.createElement("div");
+    lg.className = "legend";
+    lg.innerHTML = `<h4>${spec.title || ""}</h4>
+      <div class="li"><span class="sw ${spec.style === "walk" ? "dash" : "solid"}"></span>${spec.style === "walk" ? "Walked on foot" : "Straight-line distance"}</div>
+      <div class="li"><span class="sw dot"></span>Place he named</div>
+      <div class="li"><span class="sw ring"></span>Approximate location</div>
+      <div class="km">${spec.distance || ("≈ " + Math.round(km) + " km as the crow flies")}</div>`;
+    el.parentElement.appendChild(lg);
+    map.on("load", () => {
+      // Keep the base map's town and village names; hide roads, POIs and other clutter.
+      map.getStyle().layers.forEach(l => {
+        if (l.type !== "symbol") return;
+        const keep = /place_(village|town|city|suburb|hamlet)|^place-?(village|town|city)/.test(l.id) || /water_name/.test(l.id);
+        if (!keep) map.setLayoutProperty(l.id, "visibility", "none");
+        else { try { map.setPaintProperty(l.id, "text-color", "#5c4a36"); map.setPaintProperty(l.id, "text-halo-color", "#efe7d6"); } catch (e) {} }
+      });
+      map.addSource("dem", { type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 13,
+        tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"] });
+      map.addLayer({ id: "hills", type: "hillshade", source: "dem",
+        paint: { "hillshade-shadow-color": "#5b4630", "hillshade-highlight-color": "#fbf4e4",
+                 "hillshade-accent-color": "#6e5a40", "hillshade-exaggeration": 0.65 } });
+      map.addSource("route", { type: "geojson", data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } } });
+      map.addLayer({ id: "route", type: "line", source: "route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: spec.style === "walk"
+          ? { "line-color": "#8a3d17", "line-width": 3.2, "line-dasharray": [0.6, 1.8] }
+          : { "line-color": "#8a3d17", "line-width": 2.4, "line-opacity": 0.9 } });
+      handle.ready = true;
+      if (handle.pending) { handle.pending = false; playMap(handle); }
+    });
+    handle.pins = [spec.from, spec.to, ...(spec.show || [])].map((id, k) => {
+      const p = P[id], el = document.createElement("div");
+      el.className = "pin" + (p.approx ? " approx" : "") + (k > 1 ? " minor" : "");
+      el.innerHTML = `<i></i><span><b>${p.name}${p.approx ? " ?" : ""}</b>${p.note ? `<small>${p.note}${p.approx ? " · approx." : ""}</small>` : ""}</span>`;
+      return new maplibregl.Marker({ element: el, anchor: "left", offset: [-5, 0] }).setLngLat(ll(id));
+    });
+    return handle;
+  }
+  function haversine(a, b) {
+    const R = 6371, r = x => x * Math.PI / 180;
+    const dLat = r(b[1] - a[1]), dLon = r(b[0] - a[0]);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a[1])) * Math.cos(r(b[1])) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function playMap(m) {
+    if (!m) return;
+    // The map's own "load" event fires long before it comes on screen, so track readiness ourselves.
+    if (!m.ready) { m.pending = true; return; }
+    const { map, pins, spec } = m;
+    const go = () => {
+      const path = curve(ll(spec.from), ll(spec.to), 90, spec.style === "walk" ? 0.22 : 0.12);
+      map.getSource("route").setData({ type: "Feature", geometry: { type: "LineString", coordinates: [] } });
+      pins.forEach(p => p.remove());
+      map.jumpTo({ center: ll(spec.from), zoom: spec.zoom + 1.6 });
+      pins[0].addTo(map);
+      (spec.show ? pins.slice(2) : []).forEach(p => p.addTo(map));
+      const bounds = path.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(path[0], path[0]));
+      setTimeout(() => map.fitBounds(bounds, { padding: { top: 70, bottom: 70, left: 90, right: 150 }, duration: 3200, maxZoom: spec.zoom }), 500);
+      setTimeout(() => {
+        const t0 = performance.now(), dur = spec.style === "walk" ? 5200 : 3800;
+        const step = now => {
+          const k = Math.min((now - t0) / dur, 1), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+          map.getSource("route").setData({ type: "Feature", geometry: { type: "LineString",
+            coordinates: path.slice(0, Math.max(2, Math.round(e * path.length))) } });
+          if (k < 1) requestAnimationFrame(step); else pins[1].addTo(map);
+        };
+        requestAnimationFrame(step);
+      }, 3600);
+    };
+    go();
+  }
+
+  // Fit the pointer layer to where the photo is actually drawn (object-fit: contain), then place
+  // the ring on the person (x, y, r as fractions of the photo's width/height) and the label at lx, ly.
+  function placePointer(frame, pic, P) {
+    const W = frame.clientWidth, H = frame.clientHeight, w = pic.naturalWidth, h = pic.naturalHeight;
+    if (!w || !W) return;
+    const s = Math.min(W / w, H / h), bw = w * s, bh = h * s, el = frame.querySelector(".pointer");
+    Object.assign(el.style, { left: (W - bw) / 2 + "px", top: (H - bh) / 2 + "px", width: bw + "px", height: bh + "px" });
+    const cx = P.x * bw, cy = P.y * bh, r = P.r * bw, lx = P.lx * bw, ly = P.ly * bh;
+    el.querySelector("svg").setAttribute("viewBox", `0 0 ${bw} ${bh}`);
+    el.querySelectorAll("circle").forEach(c => { c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", r); });
+    const a = Math.atan2(ly - cy, lx - cx), x1 = cx + r * Math.cos(a), y1 = cy + r * Math.sin(a), x2 = lx - 4, y2 = ly;
+    const line = el.querySelector("line");
+    [["x1", x1], ["y1", y1], ["x2", x2], ["y2", y2]].forEach(([k, v]) => line.setAttribute(k, v));
+    line.style.setProperty("--len", Math.hypot(x2 - x1, y2 - y1));
+    Object.assign(el.querySelector(".lab").style, { left: lx + "px", top: ly + "px" });
+  }
+
+  // ---- frames (paintings and maps)
+  const framesEl = $("frames");
+  const frames = S.images.map(img => {
+    const d = document.createElement("div");
+    d.className = "frame" + (img.map ? " map" : "");
+    framesEl.appendChild(d);
+    let m = null;
+    if (img.map) {
+      d.innerHTML = '<div class="mapcard"><div class="m"></div></div>';
+      m = makeMap(d.querySelector(".m"), img.map);
+    } else {
+      // A real <img> with sync decoding: never painted half-loaded (matters for video export).
+      d.innerHTML = `<img class="pic" src="${img.src}" alt="" decoding="sync">`;
+      if (img.pan) {
+        // panorama: start at one end, glide to the other while it is on screen
+        d.classList.add("pan");
+        const pic = d.querySelector(".pic");
+        const fit = () => {
+          const over = Math.max(0, pic.offsetWidth - d.clientWidth), rev = img.pan.direction === "left";
+          d.style.setProperty("--x0", (rev ? -over : 0) + "px"); d.style.setProperty("--x1", (rev ? 0 : -over) + "px");
+          d.style.setProperty("--dur", (img.pan.seconds || 12) + "s");
+        };
+        pic.complete ? fit() : pic.addEventListener("load", fit, { once: true });
+        addEventListener("resize", fit);
+      }
+      if (img.point) {
+        d.insertAdjacentHTML("beforeend", `<div class="pointer"><svg><circle class="pulse"/><circle class="ring"/><line/></svg>
+          <div class="lab"><b>${img.point.label_hi}</b><small>${img.point.label_en}</small></div></div>`);
+        const pic = d.querySelector(".pic");
+        const place = () => placePointer(d, pic, img.point);
+        pic.complete ? place() : pic.addEventListener("load", place, { once: true });
+        addEventListener("resize", place);
+      }
+    }
+    return { ...img, el: d, m, label: img.map ? "Map · locations approximate" : (img.label || "Illustration · imagined scene") };
+  });
+  // For the video renderer: lets it wait until an on-screen map has drawn all its tiles.
+  window.__mapsLoaded = () => frames.every(f => !f.m || f.m.ready);
+  // For the video renderer: make sure every painting that is (even partly) visible is decoded.
+  window.__imagesReady = async () => {
+    const pics = [...document.querySelectorAll(".frame .pic")].filter(p => +getComputedStyle(p.parentElement).opacity > 0);
+    await Promise.all(pics.map(p => (p.complete ? Promise.resolve() : new Promise(r => p.addEventListener("load", r, { once: true })))
+      .then(() => p.decode().catch(() => {}))));
+    return pics.length;
+  };
+  window.__mapsReady = () => frames.every(f => !f.m || !f.el.classList.contains("on") ||
+    (f.m.ready && f.m.map.areTilesLoaded() && !f.m.map.isMoving() || f.m.map.areTilesLoaded()));
+  let currentFrame = -1;
+  function showFrame(i) {
+    if (i === currentFrame) return;
+    frames.forEach((f, k) => {
+      if (k === i) {
+        f.el.classList.remove("on"); void f.el.offsetWidth; f.el.classList.add("on");
+        if (f.m) { f.m.map.resize(); playMap(f.m); }
+      } else f.el.classList.remove("on");
+    });
+    $("tag").textContent = frames[i]?.label || "";
+    currentFrame = i;
+  }
+  showFrame(0);
+
+  // ---- captions
+  const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const mark = s => esc(s)
+    .replace(/\[\?(.+?)\?\]/g, '<span class="unclear" title="Unclear in the recording – best guess">$1</span>')
+    .replace(/\[अस्पष्ट\]/g, '<span class="unclear" title="Unclear in the recording">…</span>');
+
+  const capEl = $("captions");
+  let currentLine = -1;
+  function showLine(i) {
+    if (i === currentLine) return;
+    currentLine = i;
+    const old = capEl.firstElementChild;
+    if (old) {
+      // fade the outgoing line in place, so it never pushes the incoming one down
+      old.style.position = "absolute"; old.style.left = "0"; old.style.right = "0"; old.style.margin = "0 auto";
+      old.classList.add("out"); setTimeout(() => old.remove(), 600);
+    }
+    if (i < 0) return;
+    const s = S.segments[i];
+    const d = document.createElement("div");
+    const kind = s.speaker === "DAD" ? "dad" : s.speaker === "CARD" ? "card-line" : "interviewer";
+    d.className = "line out " + kind;
+    d.innerHTML = `${kind === "dad" ? `<div class="who">${S.speakerName}</div>`
+                 : kind === "card-line" ? `<div class="who">Note · not in Dad's voice</div>` : ""}
+      <div class="hi">${mark(s.text_hi)}</div><div class="en">${mark(s.text_en)}</div>`;
+    setTimeout(() => { capEl.appendChild(d); requestAnimationFrame(() => d.classList.remove("out")); }, old ? 350 : 0);
+    document.querySelectorAll(".drawer .row").forEach((r, k) => r.classList.toggle("now", k === i));
+  }
+
+  // ---- transcript drawer
+  const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  $("rows").innerHTML = S.segments.map((s, i) =>
+    `<div class="row ${s.speaker === "DAD" ? "" : "interviewer"}" data-i="${i}">
+       <div class="t">${fmt(s.start)}</div>
+       <div><div class="rh">${mark(s.text_hi)}</div><div class="re">${mark(s.text_en)}</div></div></div>`).join("");
+  $("rows").addEventListener("click", e => {
+    const r = e.target.closest(".row"); if (!r) return;
+    audio.currentTime = S.segments[+r.dataset.i].start; play();
+  });
+  $("txBtn").onclick = () => $("drawer").classList.toggle("open");
+  $("closeTx").onclick = () => $("drawer").classList.remove("open");
+  $("enBtn").onclick = e => {
+    const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+    e.currentTarget.setAttribute("aria-pressed", on);
+    stage.classList.toggle("hide-en", !on);
+  };
+
+  // ---- beats on the progress track
+  const track = $("track");
+  audio.addEventListener("loadedmetadata", () => {
+    S.images.forEach(img => {
+      if (!img.beat) return;
+      const b = document.createElement("div");
+      b.className = "beat"; b.style.left = (img.at / audio.duration * 100) + "%";
+      b.innerHTML = `<span>${img.beat}</span>`;
+      track.appendChild(b);
+    });
+  });
+  track.addEventListener("click", e => {
+    const r = track.getBoundingClientRect();
+    audio.currentTime = (e.clientX - r.left) / r.width * audio.duration;
+  });
+
+  // ---- playback
+  const icon = $("icon");
+  function setState(s) { stage.classList.remove("playing", "paused", "ended"); if (s) stage.classList.add(s); }
+  function play() { audio.play(); }
+  audio.addEventListener("play", () => {
+    setState("playing"); $("intro").classList.add("gone"); $("end").classList.add("gone");
+    icon.innerHTML = '<path d="M2 1h3.5v12H2zM8.5 1H12v12H8.5z"/>';
+  });
+  audio.addEventListener("pause", () => { if (!audio.ended) setState("paused"); icon.innerHTML = '<path d="M2 1l11 6-11 6z"/>'; });
+  audio.addEventListener("ended", () => { setState("ended"); showLine(-1); $("end").classList.remove("gone"); });
+  $("listen").onclick = play;
+  // Embedded in the archive site's stage: take play/pause commands, report when finished.
+  const params = new URLSearchParams(location.search);
+  if (params.has("embed")) {
+    window.addEventListener("message", ev => {
+      if (ev.origin !== location.origin) return;
+      if (ev.data?.cmd === "pause") audio.pause();
+      if (ev.data?.cmd === "play") play();
+      if (ev.data?.cmd === "restart") { audio.currentTime = 0; play(); }
+    });
+    audio.addEventListener("ended", () => parent.postMessage({ type: "chapter-ended" }, location.origin));
+    if (params.has("autoplay")) setTimeout(() => audio.play().catch(() => {}), 2500); // title card first
+  }
+
+  // Hooks for the video renderer (wall-clock times line the frames up with the audio).
+  window.__start = play;
+  audio.addEventListener("playing", () => { if (!window.__playStartedAt) window.__playStartedAt = Date.now() - audio.currentTime * 1000; });
+  audio.addEventListener("ended", () => { window.__endedAt = Date.now(); });
+  $("again").onclick = () => { audio.currentTime = 0; play(); };
+  $("toggle").onclick = () => audio.paused ? play() : audio.pause();
+  document.addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); $("toggle").click(); } });
+
+  // ---- music: a separate quiet track kept in step with Dad's voice
+  const music = $("music");
+  let musicOn = true;
+  if (S.music) music.src = S.music; else $("musicBtn").style.display = "none";
+  const syncMusic = () => {
+    if (!S.music) return;
+    if (Math.abs(music.currentTime - audio.currentTime) > 0.3) music.currentTime = audio.currentTime;
+    if (musicOn && !audio.paused) music.play().catch(() => {}); else music.pause();
+  };
+  ["play", "pause", "seeked", "ended"].forEach(e => audio.addEventListener(e, syncMusic));
+  $("musicBtn").onclick = e => {
+    musicOn = !musicOn; e.currentTarget.setAttribute("aria-pressed", musicOn); syncMusic();
+  };
+
+  audio.addEventListener("timeupdate", () => {
+    const t = audio.currentTime;
+    if (S.music && musicOn && Math.abs(music.currentTime - t) > 0.4) music.currentTime = t;
+    update(t);
+  });
+
+  // Frame-by-frame rendering for video export: the renderer drives the clock, no audio plays.
+  window.__render = t => {
+    const dur = window.__DUR || audio.duration || (S.segments.at(-1).end + 1.5);
+    if (t < 0) return;
+    if (t < dur) {
+      if (!stage.classList.contains("playing")) { setState("playing"); $("intro").classList.add("gone"); }
+      update(t);
+    } else if (!stage.classList.contains("ended")) {
+      setState("ended"); showLine(-1); $("end").classList.remove("gone");
+    }
+  };
+
+  function update(t) {
+    $("fill").style.width = (t / audio.duration * 100) + "%";
+    $("time").textContent = `${fmt(t)} / ${fmt(audio.duration || 0)}`;
+    let fi = 0; S.images.forEach((img, k) => { if (t >= img.at) fi = k; }); showFrame(fi);
+    const li = S.segments.findIndex(s => t >= s.start && t < s.end + 0.6);
+    if (li >= 0) showLine(li);
+  }
+})();
+</script>
+</body>
+</html>

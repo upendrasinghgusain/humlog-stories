@@ -12,12 +12,14 @@
 .EXAMPLE
   ./deploy.ps1            # build + publish
   ./deploy.ps1 -SkipBuild # publish the existing site/ folder
+  ./deploy.ps1 -SkipTv    # website only; leave the TV version as it is
 #>
 param(
     [string] $Subscription = 'UpendraPractice',
     [string] $ResourceGroup = 'rg-family-gallery',
     [string] $Prefix = 'stories',
-    [switch] $SkipBuild
+    [switch] $SkipBuild,
+    [switch] $SkipTv
 )
 
 $ErrorActionPreference = 'Continue'
@@ -87,7 +89,8 @@ try {
     # TV version (site-tv/) under tv/stories/: Humlog's /tv rules apply there - no family login
     # (the TV's old browser can't do it), but Cloudflare requires the TV key on every request.
     $tv = Join-Path $root 'site-tv'
-    if (Test-Path (Join-Path $tv 'index.html')) {
+    if ($SkipTv) { Write-Host 'Skipping the TV version (-SkipTv)' }
+    elseif (Test-Path (Join-Path $tv 'index.html')) {
         Write-Host "Uploading TV version -> `$web/tv/$Prefix/"
         $tvDest = "tv/$Prefix"
         foreach ($t in @(@('*.mp4', 'video/mp4', 'public, max-age=86400'), @('*.m4a', 'audio/mp4', 'public, max-age=86400'),
