@@ -323,8 +323,9 @@
     $(slot).hidden = false; $(tag).hidden = false;
   }
   const usePhoto = use => (A.photos || []).find(p => (p.use || []).includes(use));
-  const startPhotoFor = () => who === "mum" ? photoById["mum-sinala"] : usePhoto("start");
-  const endPhotoFor = () => who === "mum" ? photoById["mum-dad-today"] : usePhoto("end");
+  // each person's start and end photos are chosen in the private photo list ("use": ["start-mum"], ...)
+  const startPhotoFor = () => usePhoto(who === "dad" ? "start" : "start-" + who) || usePhoto("start");
+  const endPhotoFor = () => usePhoto(who === "dad" ? "end" : "end-" + who) || usePhoto("end");
 
   function openMenu() {
     menu.classList.add("open"); scrim.classList.add("show"); $("menuBtn").setAttribute("aria-expanded", "true");
