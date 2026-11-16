@@ -85,6 +85,9 @@ def main() -> None:
     sil = silences(original, tr[min(used)]["start"] - 3, tr[max(used)]["end"] + 3)
     fine = silences(original, tr[min(used)]["start"] - 3, tr[max(used)]["end"] + 3, noise=-33, d=0.12)
     mutes = mute_spans(cfg, fine)
+    # Explicit spans (absolute seconds, found by listening or a pitch check) for backchannels
+    # that are not separated from Dad's words by silence.
+    mutes += [tuple(m) for m in cfg.get("mute", [])]
 
     pieces, offsets, segs, t, card_no = [], [], [], 1.2, 0  # a short breath of room sound first
     for item in cfg["edit"]:
@@ -171,7 +174,7 @@ def main() -> None:
             (folder / "photos").mkdir(exist_ok=True)
             shutil.copy2(pj.parent / f"{ph['id']}.jpg", folder / "photos" / f"{ph['id']}.jpg")
             v["src"] = f"photos/{ph['id']}.jpg"
-            v["label"] = f"Photograph · {ph['date']}"
+            v["label"] = f"Photograph · {ph['caption']} · {ph['date']}"
         elif "src" in v:
             v["label"] = "Illustration · imagined scene"
         visuals.append({**v, "at": max(at - 0.4, 0) if visuals else 0})

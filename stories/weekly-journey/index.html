@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>हर शनिवार शाम · Every Saturday Evening</title>
+<title>Humlog Stories</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -38,6 +38,27 @@
     from { transform: scale(1.0); }
     to   { transform: scale(1.045); }
   }
+  /* Pointer on a photograph ("this is who it is"): ring, line, label, revealed a moment after the photo */
+  .pointer { position: absolute; pointer-events: none; }
+  .pointer svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .pointer circle { fill: none; stroke: #f0d6ae; stroke-width: 2.5; opacity: 0;
+                    transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 6px rgba(0,0,0,.7)); }
+  .pointer line { stroke: #f0d6ae; stroke-width: 1.8; stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+                  filter: drop-shadow(0 0 4px rgba(0,0,0,.8)); }
+  .pointer .lab { position: absolute; transform: translateY(-50%); opacity: 0; white-space: nowrap;
+                  background: rgba(22,16,10,.72); border: 1px solid rgba(240,214,174,.45); border-radius: 4px;
+                  padding: 6px 12px 7px; text-align: left; }
+  .pointer .lab b { display: block; font: 600 min(clamp(18px, 2.2vw, 28px), 3.6vh)/1.2 var(--hi); color: #f6ead6; }
+  .pointer .lab small { display: block; font: 500 min(clamp(12px, 1.2vw, 15px), 2.2vh)/1.3 var(--ui);
+                        letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+  .frame.on .pointer .ring { animation: ptrIn 1s ease-out 1.6s forwards; }
+  .frame.on .pointer .pulse { animation: ptrPulse 2.6s ease-out 2.6s 4; }
+  .frame.on .pointer line { animation: ptrDraw .8s ease-out 2.4s forwards; }
+  .frame.on .pointer .lab { animation: ptrLab .9s ease-out 3.0s forwards; }
+  @keyframes ptrIn { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }
+  @keyframes ptrPulse { from { opacity: .8; transform: scale(1); } to { opacity: 0; transform: scale(1.5); } }
+  @keyframes ptrDraw { to { stroke-dashoffset: 0; } }
+  @keyframes ptrLab { from { opacity: 0; transform: translate(-6px, -50%); } to { opacity: 1; transform: translate(0, -50%); } }
   .vignette {
     position: absolute; inset: 0; pointer-events: none;
     background: radial-gradient(ellipse at 50% 30%, rgba(217,164,91,.06) 0%, transparent 60%);
@@ -122,7 +143,8 @@
   .unclear { border-bottom: 1px dotted var(--amber); color: #f0d6ae; }
   /* Narration cards: quieter, clearly not Dad's words */
   .line.card-line { padding-top: 22px; }
-  .line.card-line .hi { font-size: clamp(17px, 2vw, 22px); color: var(--ink-soft); }
+  .line.card-line .who { color: var(--ink-faint); }
+  .line.card-line .hi { font-size: clamp(17px, 2vw, 22px); color: var(--ink-soft); font-style: italic; }
   .line.card-line .en { font-family: var(--ui); font-style: normal; font-size: 12px; letter-spacing: .14em;
                         text-transform: uppercase; color: var(--amber); opacity: .8; }
   .hide-en .en { display: none; }
@@ -283,6 +305,7 @@
 
   // ---- intro / end text
   $("introPlace").textContent = S.place;
+  document.title = S.title_hi + " · " + S.title_en;
   $("introTitle").textContent = S.title_hi;
   $("introSub").textContent = S.title_en;
   $("introBy").textContent = S.byline;
@@ -390,6 +413,23 @@
     go();
   }
 
+  // Fit the pointer layer to where the photo is actually drawn (object-fit: contain), then place
+  // the ring on the person (x, y, r as fractions of the photo's width/height) and the label at lx, ly.
+  function placePointer(frame, pic, P) {
+    const W = frame.clientWidth, H = frame.clientHeight, w = pic.naturalWidth, h = pic.naturalHeight;
+    if (!w || !W) return;
+    const s = Math.min(W / w, H / h), bw = w * s, bh = h * s, el = frame.querySelector(".pointer");
+    Object.assign(el.style, { left: (W - bw) / 2 + "px", top: (H - bh) / 2 + "px", width: bw + "px", height: bh + "px" });
+    const cx = P.x * bw, cy = P.y * bh, r = P.r * bw, lx = P.lx * bw, ly = P.ly * bh;
+    el.querySelector("svg").setAttribute("viewBox", `0 0 ${bw} ${bh}`);
+    el.querySelectorAll("circle").forEach(c => { c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", r); });
+    const a = Math.atan2(ly - cy, lx - cx), x1 = cx + r * Math.cos(a), y1 = cy + r * Math.sin(a), x2 = lx - 4, y2 = ly;
+    const line = el.querySelector("line");
+    [["x1", x1], ["y1", y1], ["x2", x2], ["y2", y2]].forEach(([k, v]) => line.setAttribute(k, v));
+    line.style.setProperty("--len", Math.hypot(x2 - x1, y2 - y1));
+    Object.assign(el.querySelector(".lab").style, { left: lx + "px", top: ly + "px" });
+  }
+
   // ---- frames (paintings and maps)
   const framesEl = $("frames");
   const frames = S.images.map(img => {
@@ -403,6 +443,14 @@
     } else {
       // A real <img> with sync decoding: never painted half-loaded (matters for video export).
       d.innerHTML = `<img class="pic" src="${img.src}" alt="" decoding="sync">`;
+      if (img.point) {
+        d.insertAdjacentHTML("beforeend", `<div class="pointer"><svg><circle class="pulse"/><circle class="ring"/><line/></svg>
+          <div class="lab"><b>${img.point.label_hi}</b><small>${img.point.label_en}</small></div></div>`);
+        const pic = d.querySelector(".pic");
+        const place = () => placePointer(d, pic, img.point);
+        pic.complete ? place() : pic.addEventListener("load", place, { once: true });
+        addEventListener("resize", place);
+      }
     }
     return { ...img, el: d, m, label: img.map ? "Map · locations approximate" : (img.label || "Illustration · imagined scene") };
   });
@@ -453,7 +501,8 @@
     const d = document.createElement("div");
     const kind = s.speaker === "DAD" ? "dad" : s.speaker === "CARD" ? "card-line" : "interviewer";
     d.className = "line out " + kind;
-    d.innerHTML = `${kind === "dad" ? `<div class="who">${S.speakerName}</div>` : ""}
+    d.innerHTML = `${kind === "dad" ? `<div class="who">${S.speakerName}</div>`
+                 : kind === "card-line" ? `<div class="who">Note · not in Dad's voice</div>` : ""}
       <div class="hi">${mark(s.text_hi)}</div><div class="en">${mark(s.text_en)}</div>`;
     setTimeout(() => { capEl.appendChild(d); requestAnimationFrame(() => d.classList.remove("out")); }, old ? 350 : 0);
     document.querySelectorAll(".drawer .row").forEach((r, k) => r.classList.toggle("now", k === i));
