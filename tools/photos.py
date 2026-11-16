@@ -21,7 +21,7 @@ MAX_SIDE = 1600
 def describe(edits: dict) -> str:
     parts = []
     if "rotate" in edits:
-        parts.append("straightened")
+        parts.append("turned upright" if edits["rotate"] % 90 == 0 else "straightened")
     if "crop" in edits:
         parts.append("cropped")
     if "autocontrast" in edits:
@@ -36,7 +36,10 @@ def main() -> None:
         im = ImageOps.exif_transpose(Image.open(ROOT / p["file"])).convert("RGB")
         e = p.get("edits", {})
         if "rotate" in e:
-            im = im.rotate(e["rotate"], resample=Image.BICUBIC, expand=False, fillcolor=(0, 0, 0))
+            if e["rotate"] % 90 == 0:   # a sideways scan: turn it upright, nothing cut off
+                im = im.rotate(e["rotate"], expand=True)
+            else:                       # a slight straightening
+                im = im.rotate(e["rotate"], resample=Image.BICUBIC, expand=False, fillcolor=(0, 0, 0))
         if "crop" in e:
             im = im.crop(tuple(e["crop"]))
         if "autocontrast" in e:

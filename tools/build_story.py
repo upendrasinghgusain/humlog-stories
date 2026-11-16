@@ -180,6 +180,7 @@ def main() -> None:
         # "delay": seconds after the anchor, e.g. a painting at a card, then the real photo 3 s later
         visuals.append({**v, "at": (max(at - 0.4, 0) if visuals else 0) + v.get("delay", 0)})
 
+    visuals.sort(key=lambda v: v["at"])  # the player expects them in time order
     clips = [p for p in pieces if p[0] == "clip"]
     story = {
         "audio": "audio.m4a",
