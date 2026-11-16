@@ -82,6 +82,20 @@ def main() -> None:
             mutes.append([round(u["start"] - 0.05, 2), round(u["end"] + 0.05, 2), "auto"])
         print(f"{key:14} {old[0]}-{old[1]}  ->  {a2}-{b2}" + (f"   mute {len(inner)}" if inner else ""))
 
+    # Back-to-back passages (the narrator talks straight on) must not overlap, or words play twice:
+    # split them at the real pause nearest the transcript boundary.
+    clips = [it for it in cfg["edit"] if "segs" in it and it.get("start") is not None and it.get("end") is not None]
+    for a_, b_ in zip(clips, clips[1:]):
+        if b_["segs"][0] > a_["segs"][-1] and b_["start"] < a_["end"]:
+            edge = tr[b_["segs"][0]]["start"]
+            near = [(abs(s - edge), s, e) for s, e in silences(original, edge - 1.5, edge + 1.5, noise=-32, d=0.1)]
+            if near:
+                _, s, e = min(near)
+                a_["end"], b_["start"] = round(s + 0.1, 2), round(max(e - 0.06, s + 0.1), 2)
+            else:
+                a_["end"] = b_["start"] = round(edge, 2)
+            print(f"split overlap {a_['segs']} | {b_['segs']} at {a_['end']} / {b_['start']}")
+
     cfg["mute"] = mutes
     if not dry:
         cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
