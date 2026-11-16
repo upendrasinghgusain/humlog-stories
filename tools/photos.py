@@ -41,7 +41,8 @@ def main() -> None:
             im = im.crop(tuple(e["crop"]))
         if "autocontrast" in e:
             im = ImageOps.autocontrast(im, cutoff=e["autocontrast"], preserve_tone=True)
-        im.thumbnail((MAX_SIDE, MAX_SIDE), Image.LANCZOS)
+        if not p.get("full"):  # panoramas keep their full width
+            im.thumbnail((MAX_SIDE, MAX_SIDE), Image.LANCZOS)
         out = OUT / f"{p['id']}.jpg"
         im.save(out, quality=88, optimize=True, progressive=True)
         p["_edits_text"] = describe(e)

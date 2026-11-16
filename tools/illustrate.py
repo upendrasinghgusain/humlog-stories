@@ -34,13 +34,19 @@ REF_NOTE = ("The attached photograph(s) show the real place today. Use them only
             "described, leaving out anything modern. Do not copy the photograph. ")
 
 
-def generate(prompt: str, model: str, setting: str = "", refs: list | None = None) -> bytes:
+MATCH_NOTE = ("The attached photograph shows the real place today. Repaint THIS EXACT VIEW: keep the same composition, "
+              "camera position, horizon, ridge lines and the position of the main buildings and trees, so the painting can "
+              "dissolve into the photograph. Paint it in the style above, as it would have looked in the period described: "
+              "replace modern things as the scene asks and leave out all people, cars, signs and writing. ")
+
+
+def generate(prompt: str, model: str, setting: str = "", refs: list | None = None, match: bool = False) -> bytes:
     parts = []
     for r in refs or []:
         p = pathlib.Path(r)
         mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
         parts.append({"inline_data": {"mime_type": mime, "data": base64.b64encode(p.read_bytes()).decode()}})
-    text = STYLE.replace("{setting}", setting + " " if setting else "") + (REF_NOTE if refs else "") + "Scene: " + prompt
+    text = STYLE.replace("{setting}", setting + " " if setting else "") + ((MATCH_NOTE if match else REF_NOTE) if refs else "") + "Scene: " + prompt
     body = {
         "contents": [{"parts": parts + [{"text": text}]}],
         "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "16:9"}},
@@ -80,7 +86,7 @@ def main() -> None:
             print("skip", target.name)
             continue
         # "refs": reference photos of the real place (private, never published), e.g. media/reference/...
-        target.write_bytes(generate(s["prompt"], model, setting, s.get("refs")))
+        target.write_bytes(generate(s["prompt"], model, setting, s.get("refs"), s.get("match", False)))
         print("ok", target.name)
 
 

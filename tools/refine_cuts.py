@@ -62,8 +62,8 @@ def main() -> None:
         inner = [u for u in inner if u["end"] <= b]
         # Window timings drift by up to ~1 s, so never cross the transcript's own neighbouring questions.
         first, last = item["segs"][0], item["segs"][-1]
-        prev_q = next((tr[i]["end"] for i in range(first - 1, max(first - 4, -1), -1) if tr[i]["speaker"] != "DAD"), None)
-        next_q = next((tr[i]["start"] for i in range(last + 1, min(last + 4, len(tr))) if tr[i]["speaker"] != "DAD"), None)
+        prev_q = next((tr[i]["end"] for i in range(first - 1, max(first - 4, -1), -1) if tr[i]["speaker"] not in ("DAD", "MUM")), None)
+        next_q = next((tr[i]["start"] for i in range(last + 1, min(last + 4, len(tr))) if tr[i]["speaker"] not in ("DAD", "MUM")), None)
         if prev_q is not None:
             a = max(a, prev_q - 0.3)
         if next_q is not None:

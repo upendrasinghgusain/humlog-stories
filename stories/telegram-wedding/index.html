@@ -38,6 +38,12 @@
     from { transform: scale(1.0); }
     to   { transform: scale(1.045); }
   }
+  /* Panorama: a wide band across the frame that glides slowly from one end to the other */
+  .frame.pan { animation: none !important; overflow: hidden; }
+  .frame.pan .pic { position: absolute; left: 0; top: 50%; width: auto; height: 64%; max-width: none; object-fit: fill;
+                    transform: translate(0, -50%); box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+  .frame.pan.on .pic { animation: pan var(--dur, 12s) ease-in-out .6s forwards; }
+  @keyframes pan { from { transform: translate(var(--x0, 0px), -50%); } to { transform: translate(var(--x1, 0px), -50%); } }
   /* Pointer on a photograph ("this is who it is"): ring, line, label, revealed a moment after the photo */
   .pointer { position: absolute; pointer-events: none; }
   .pointer svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
@@ -445,6 +451,18 @@
     } else {
       // A real <img> with sync decoding: never painted half-loaded (matters for video export).
       d.innerHTML = `<img class="pic" src="${img.src}" alt="" decoding="sync">`;
+      if (img.pan) {
+        // panorama: start at one end, glide to the other while it is on screen
+        d.classList.add("pan");
+        const pic = d.querySelector(".pic");
+        const fit = () => {
+          const over = Math.max(0, pic.offsetWidth - d.clientWidth), rev = img.pan.direction === "left";
+          d.style.setProperty("--x0", (rev ? -over : 0) + "px"); d.style.setProperty("--x1", (rev ? 0 : -over) + "px");
+          d.style.setProperty("--dur", (img.pan.seconds || 12) + "s");
+        };
+        pic.complete ? fit() : pic.addEventListener("load", fit, { once: true });
+        addEventListener("resize", fit);
+      }
       if (img.point) {
         d.insertAdjacentHTML("beforeend", `<div class="pointer"><svg><circle class="pulse"/><circle class="ring"/><line/></svg>
           <div class="lab"><b>${img.point.label_hi}</b><small>${img.point.label_en}</small></div></div>`);

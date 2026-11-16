@@ -26,7 +26,7 @@ from transcribe_chunked import FFMPEG  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODEL = "gemini-pro-latest"
 PROMPT = """This is a short excerpt of a Hindi family interview. Speakers:
-- ELDER: an elderly man (the narrator); his speech is slow and may be slurred.
+- ELDER: the elderly narrator telling their life story (an older man or woman).
 - OTHER: anyone else (the interviewer, a younger man, or anyone in the room).
 List every utterance in order, including short ones like "हम्म", "हाँ", "ओके".
 For each give the speaker, the Hindi text, and start and end times in seconds from the start
