@@ -24,18 +24,39 @@ def family_context() -> str:
     return f.read_text(encoding="utf-8") if f.exists() else ""
 
 
-CONTEXT = """
+# Who is telling their story in this recording: NARRATOR=DAD (default) or NARRATOR=MUM.
+NARRATOR = os.environ.get("NARRATOR", "DAD").upper()
+NARRATORS = {
+    "DAD": {
+        "who": "DAD: the father, telling his life story. His speech may be unclear; listen carefully and patiently.",
+        "terms": """DAD often names relatives from the INTERVIEWER's point of view.
+   "दादा जी" / "दादी" usually mean DAD's own father / mother; "चाचा" may mean DAD's younger
+   brother. Translate as e.g. "your grandfather (my father)" when that is clearly meant.""",
+    },
+    "MUM": {
+        "who": "MUM: the mother, telling her life story. Clear speech, possibly fast, with Garhwali words.",
+        "terms": """MUM often names relatives from the INTERVIEWER's point of view.
+   "नाना जी" / "नानी" usually mean MUM's own father / mother; "दादा जी" / "दादी" mean her
+   father-in-law / mother-in-law; "पापा" / "डैडी" / "तुम्हारे पापा" usually mean her husband (the
+   INTERVIEWER's father). Translate as e.g. "your grandfather (my father)" or "your dad (my husband)"
+   when that is clearly meant.""",
+    },
+}[NARRATOR]
+
+CONTEXT = f"""
 This is a private family oral-history interview, recorded on a smartphone, in Hindi
-(possibly with some regional words and English loanwords).
+(possibly with some Garhwali/regional words and English loanwords).
 
 Speakers:
 - INTERVIEWER: the son, asking questions. Clear speech.
-- DAD: the father, telling his life story. His speech may be unclear; listen carefully and patiently.
+- {NARRATORS["who"]}
+- OTHER: anyone else in the room.
 
-Background from the family (may help with names and places):
+Background from the family (may help with names and places; notes about other people's
+speech do not apply to this narrator):
 """ + family_context()
 
-INSTRUCTIONS = """
+INSTRUCTIONS = f"""
 Produce a faithful verbatim transcript in Devanagari Hindi.
 
 Rules - these matter more than fluency:
@@ -47,12 +68,10 @@ Rules - these matter more than fluency:
 4. Do not use the "known names" list to force a name where it was not said.
 5. Split into short segments (one sentence or phrase each, normally under 15 seconds),
    with accurate start/end timestamps in seconds from the start of the audio.
-6. Label each segment's speaker as INTERVIEWER or DAD.
+6. Label each segment's speaker as INTERVIEWER, {NARRATOR} or OTHER.
 7. Give each segment a confidence: high, medium or low.
 8. Also give a plain English translation of each segment (faithful, not polished).
-9. Family terms: DAD often names relatives from the INTERVIEWER's point of view.
-   "दादा जी" / "दादी" usually mean DAD's own father / mother; "चाचा" may mean DAD's younger
-   brother. Translate as e.g. "your grandfather (my father)" when that is clearly meant.
+9. Family terms: {NARRATORS["terms"]}
 """
 
 SCHEMA = {
@@ -65,7 +84,7 @@ SCHEMA = {
                 "properties": {
                     "start": {"type": "NUMBER"},
                     "end": {"type": "NUMBER"},
-                    "speaker": {"type": "STRING", "enum": ["INTERVIEWER", "DAD", "OTHER"]},
+                    "speaker": {"type": "STRING", "enum": ["INTERVIEWER", NARRATOR, "OTHER"]},
                     "text_hi": {"type": "STRING"},
                     "text_en": {"type": "STRING"},
                     "confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
