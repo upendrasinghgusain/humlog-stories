@@ -382,7 +382,7 @@
     store.set("lastScene", s.id);
     if (s.kind === "story") {
       $("voice").hidden = true; frame.hidden = false;
-      const url = s.ch.url + "?embed=1&autoplay=1";
+      const url = s.ch.url + "?embed=1&autoplay=1&v=" + (A.version || "");
       if (frame.dataset.url === url) frame.contentWindow.postMessage({ cmd: "restart" }, location.origin);
       else { frame.dataset.url = url; frame.src = url; }
     } else {

@@ -14,6 +14,7 @@ Usage:
 
 import json
 import os
+import time
 import pathlib
 import re
 import shutil
@@ -51,6 +52,15 @@ def newer(src: pathlib.Path, dst: pathlib.Path) -> bool:
     return not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime
 
 
+# Every build gets a version stamp, added to the URLs the pages load ("?v=..."). Cloudflare tells
+# browsers to keep files for hours, so without it a phone could show yesterday's menu or picture.
+VER = time.strftime("%Y%m%d%H%M%S")
+
+
+def stamp(url: str) -> str:
+    return url + ("&" if "?" in url else "?") + "v=" + VER
+
+
 def build_tv(data: dict) -> None:
     """site-tv/: the TV version (old-browser page, served at /tv/stories/?key=...).
 
@@ -59,7 +69,8 @@ def build_tv(data: dict) -> None:
     """
     tv = ROOT / "site-tv"
     (tv / "chapters").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(ROOT / "site-src" / "tv.html", tv / "index.html")
+    (tv / "index.html").write_text((ROOT / "site-src" / "tv.html").read_text(encoding="utf-8")
+                                   .replace("withKey('data.js')", f"withKey('data.js?v={VER}')"), encoding="utf-8")
     for sub in ("media", "photos"):
         if (SITE / sub).exists():
             shutil.copytree(SITE / sub, tv / sub, dirs_exist_ok=True)
@@ -71,7 +82,7 @@ def build_tv(data: dict) -> None:
             dst = tv / "chapters" / f"{c['id']}.mp4"
             if newer(mp4, dst):
                 shutil.copy2(mp4, dst)
-            c["video"] = f"chapters/{c['id']}.mp4"
+            c["video"] = stamp(f"chapters/{c['id']}.mp4")
         else:
             print(f"  TV: no video for chapter {c['id']} (render it with tools/render_video.py)")
         chapters.append(c)
@@ -83,7 +94,9 @@ def build_tv(data: dict) -> None:
 
 def main() -> None:
     (SITE / "media").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(ROOT / "site-src" / "index.html", SITE / "index.html")
+    (SITE / "index.html").write_text((ROOT / "site-src" / "index.html").read_text(encoding="utf-8")
+                                     .replace('<script src="data.js"></script>', f'<script src="{stamp("data.js")}"></script>'),
+                                     encoding="utf-8")
 
     # ---- recordings
     originals = {p.name: p for p in (ROOT / "media").rglob("*.m4a")}
@@ -134,8 +147,12 @@ def main() -> None:
         js = (folder / "story.js").read_text(encoding="utf-8")
         for a, b in renames.items():
             js = js.replace(a, b)
+        js = re.sub(r'"((?:images|photos)/[^"?]+|audio\.m4a|music\.m4a)"', lambda m: '"' + stamp(m[1]) + '"', js)
         (out / "story.js").write_text(js, encoding="utf-8")
-        for name in ("index.html", "audio.m4a", "music.m4a"):
+        (out / "index.html").write_text((folder / "index.html").read_text(encoding="utf-8")
+                                        .replace('<script src="story.js"></script>', f'<script src="{stamp("story.js")}"></script>'),
+                                        encoding="utf-8")
+        for name in ("audio.m4a", "music.m4a"):
             if (folder / name).exists():
                 shutil.copy2(folder / name, out / name)
         if (folder / "photos").exists():
@@ -160,12 +177,12 @@ def main() -> None:
         (SITE / "photos").mkdir(exist_ok=True)
         for p in json.loads(pj.read_text(encoding="utf-8")):
             shutil.copy2(pj.parent / f"{p['id']}.jpg", SITE / "photos" / f"{p['id']}.jpg")
-            photos.append({"id": p["id"], "url": f"photos/{p['id']}.jpg", "caption": p["caption"], "date": p["date"],
+            photos.append({"id": p["id"], "url": stamp(f"photos/{p['id']}.jpg"), "caption": p["caption"], "date": p["date"],
                            "edits": p.get("_edits_text", ""), "events": p.get("events", []), "use": p.get("use", [])})
     for e in events:
         e["photos"] = [p["id"] for p in photos if e["id"] in p["events"]]
 
-    data = {"people": PEOPLE, "recordings": recordings, "events": events, "chapters": chapters, "photos": photos,
+    data = {"version": VER, "people": PEOPLE, "recordings": recordings, "events": events, "chapters": chapters, "photos": photos,
             "note": NOTE}
     (SITE / "data.js").write_text("window.ARCHIVE = " + json.dumps(data, ensure_ascii=False) + ";\n", encoding="utf-8")
     size = sum(f.stat().st_size for f in SITE.rglob("*") if f.is_file()) / 1e6
