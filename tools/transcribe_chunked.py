@@ -8,6 +8,7 @@ Usage:
 """
 
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -50,14 +51,20 @@ def main() -> None:
     size = float(sys.argv[4]) if len(sys.argv) > 4 else 60.0
 
     total = duration(audio)
-    segments, start = [], 0.0
+    segments, start = [], float(os.environ.get("START", 0))
     with tempfile.TemporaryDirectory() as tmp:
         while start < total:
             chunk = pathlib.Path(tmp) / f"c{int(start):05d}.m4a"
             subprocess.run([FFMPEG, "-v", "error", "-ss", str(start), "-t", str(size), "-i", str(audio),
                             "-ac", "1", "-c:a", "aac", "-b:a", "96k", str(chunk)], check=True)
             print(f"chunk {start:.0f}s / {total:.0f}s")
-            res = with_retry(t.transcribe, chunk, model)
+            cache = t.ROOT / "archive" / "derived" / rec_id / "chunks" / f"{model}.{int(size)}.{int(start):05d}.json"
+            if cache.exists():  # finished chunks are kept, so a failed run never pays twice
+                res = json.loads(cache.read_text(encoding="utf-8"))
+            else:
+                res = with_retry(t.transcribe, chunk, model)
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                cache.write_text(json.dumps(res, ensure_ascii=False), encoding="utf-8")
             for s in res["segments"]:
                 s["start"] = round(s["start"] + start, 2)
                 s["end"] = round(min(s["end"], size) + start, 2)

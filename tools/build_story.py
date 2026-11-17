@@ -172,9 +172,10 @@ def main() -> None:
 
         # Optional music bed: a separate, quiet track the page can switch off.
         if cfg.get("music"):
-            subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(folder / cfg["music"]),
+            # loops if the piece is shorter than the chapter; a chapter may ask for it louder ("music_lufs")
+            subprocess.run([FFMPEG, "-v", "error", "-y", "-stream_loop", "-1", "-i", str(folder / cfg["music"]),
                             "-t", f"{total:.2f}",
-                            "-af", f"loudnorm=I=-33:TP=-9,afade=t=in:d=4,afade=t=out:st={total - 5:.2f}:d=5"
+                            "-af", f"loudnorm=I={cfg.get('music_lufs', -33)}:TP=-9,afade=t=in:d=4,afade=t=out:st={total - 5:.2f}:d=5"
                             # the music steps aside while the narrator sings
                             + "".join(f",volume=enable='between(t,{a - 1:.2f},{b + 1:.2f})':volume=0.12" for a, b in songs),
                             "-c:a", "aac", "-b:a", "128k", str(folder / "music.m4a")], check=True)
@@ -216,6 +217,7 @@ def main() -> None:
     clips = [p for p in pieces if p[0] == "clip" and len(p) == 3]  # interview passages (not songs)
     story = {
         "audio": "audio.m4a",
+        "style": cfg.get("style"),  # "bergman": black and white, dips to black, slow push-ins
         "music": "music.m4a" if cfg.get("music") else None,
         "title_hi": cfg["title_hi"], "title_en": cfg["title_en"], "place": cfg["place"],
         "byline": cfg["byline"], "speakerName": cfg["speakerName"], "note": cfg["note"],

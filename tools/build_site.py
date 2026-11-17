@@ -31,7 +31,7 @@ DERIVED = ROOT / "archive" / "derived"
 PEOPLE = [
     {"id": "dad", "name_en": "Dad", "name_hi": "पापा", "status": "recorded"},
     {"id": "mum", "name_en": "Mum", "name_hi": "मम्मी", "status": "recorded"},
-    {"id": "dadi", "name_en": "Dadi", "name_hi": "दादी", "status": "coming"},
+    {"id": "dadi", "name_en": "Dadi ji", "name_hi": "दादी जी", "status": "recorded"},
 ]
 NOTE = ("Draft. Transcripts, translations and dates are AI drafts that the family has not yet checked. "
         "Words with a dotted underline were unclear. Story images are illustrations, not photographs. "
@@ -106,8 +106,8 @@ def main() -> None:
     recordings = []
     for n, f in enumerate(sorted(DERIVED.glob("REC-*/transcript.gemini-pro-latest.chunked.json")), 1):
         rec_id = f.parent.name
-        if rec_id.startswith("REC-MUM"):
-            # Mum's full interviews are never published: they include passages the family chose to leave
+        if rec_id.startswith(("REC-MUM", "REC-DADI")):
+            # Mum's and Dadi ji's full interviews are never published: they include passages the family chose to leave
             # out. Her stories carry their own edited audio.
             stale = SITE / "media" / f"{rec_id}.m4a"
             stale.unlink(missing_ok=True)

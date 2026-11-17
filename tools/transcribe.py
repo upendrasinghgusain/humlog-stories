@@ -41,14 +41,23 @@ NARRATORS = {
    INTERVIEWER's father). Translate as e.g. "your grandfather (my father)" or "your dad (my husband)"
    when that is clearly meant.""",
     },
+    "DADI": {
+        "who": "DADI: the grandmother, in her mid-nineties, speaking GARHWALI (not Hindi). She is very hard of hearing, so "
+               "the INTERVIEWER may shout or repeat questions and she may answer something else. Old, soft, unclear speech; "
+               "listen carefully and patiently.",
+        "terms": """DADI speaks Garhwali. Write her words as spoken, in Devanagari Garhwali (do not convert to Hindi).
+   Translate faithfully into English; where a Garhwali word is uncertain, mark it [?word?] in text_hi and give your
+   best meaning in text_en with a "(?)". Her relatives: her husband, her sons (one of them is the
+   INTERVIEWER's father), daughters-in-law, grandchildren.""",
+    },
 }[NARRATOR]
 
 CONTEXT = f"""
 This is a private family oral-history interview, recorded on a smartphone, in Hindi
-(possibly with some Garhwali/regional words and English loanwords).
+(possibly with some Garhwali/regional words and English loanwords; one narrator speaks only Garhwali).
 
 Speakers:
-- INTERVIEWER: the son, asking questions. Clear speech.
+- INTERVIEWER: the son (or grandson), asking questions. Clear speech.
 - {NARRATORS["who"]}
 - OTHER: anyone else in the room.
 
@@ -57,7 +66,7 @@ speech do not apply to this narrator):
 """ + family_context()
 
 INSTRUCTIONS = f"""
-Produce a faithful verbatim transcript in Devanagari Hindi.
+Produce a faithful verbatim transcript in Devanagari (Hindi, or Garhwali for a Garhwali speaker).
 
 Rules - these matter more than fluency:
 1. Write what is actually said. Keep repetitions, hesitations and colloquial grammar.
@@ -120,6 +129,9 @@ def transcribe(audio: pathlib.Path, model: str) -> dict:
         }],
         "generationConfig": {
             "temperature": 0,
+            # Hard Garhwali audio can make the model think for minutes (and bill for it): cap it.
+            "maxOutputTokens": 16000,
+            "thinkingConfig": {"thinkingBudget": 2048},
             "responseMimeType": "application/json",
             "responseSchema": SCHEMA,
         },
@@ -145,6 +157,20 @@ def transcribe(audio: pathlib.Path, model: str) -> dict:
     try:
         return json.loads(text[text.index("{"): text.rindex("}") + 1])
     except ValueError:
+        # A cut-off answer: keep every complete segment rather than lose the piece.
+        import re
+        segs = []
+        for m in re.finditer(r"\{[^{}]*\}", text):
+            try:
+                o = json.loads(m.group(0))
+            except ValueError:
+                continue
+            if {"start", "end", "speaker", "text_hi"} <= o.keys():
+                segs.append(o)
+        if segs:
+            print(f"  answer was cut off; kept {len(segs)} complete segments "
+                  f"({resp['candidates'][0].get('finishReason')})")
+            return {"segments": segs, "notes": "truncated"}
         raw = ROOT / "archive" / "derived" / f"raw.{model}.txt"
         raw.parent.mkdir(parents=True, exist_ok=True)
         raw.write_text(text, encoding="utf-8")

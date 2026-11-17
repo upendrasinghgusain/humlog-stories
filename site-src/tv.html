@@ -103,7 +103,7 @@
   <div class="center" id="startText">
     <div class="title" style="font-size:7vw">हम लोग</div>
     <div class="sub">A family's stories, in their own voices</div>
-    <div><span class="who" id="whoDad">DAD'S STORIES</span><span class="who" id="whoMum">MUM'S STORIES</span></div>
+    <div><span class="who" id="whoDad">DAD'S STORIES</span><span class="who" id="whoMum">MUM'S STORIES</span><span class="who" id="whoDadi">DADI JI'S STORIES</span></div>
     <div class="hint">◀ ▶ choose &nbsp;·&nbsp; OK play &nbsp;·&nbsp; ▲ menu &nbsp;·&nbsp; while playing: ◀ ▶ previous / next, OK pause</div>
   </div>
   <div id="sound"></div>
@@ -176,7 +176,16 @@
   function storyFrom(i, dir) { for (var j = i; j >= 0 && j < scenes.length; j += dir) if (scenes[j].kind === 'story') return j; return -1; }
   function storyNumber(i) { var n = 0; for (var j = 0; j <= i; j++) if (scenes[j].kind === 'story') n++; return n; }
   function hasStories(p) { return !!find(A.chapters, function (c) { return c.video && personOfChapter(c) === p; }); }
-  function nameOf(p) { return p === 'mum' ? 'Mum' : 'Dad'; }
+  function nameOf(p) { return p === 'mum' ? 'Mum' : p === 'dadi' ? 'Dadi ji' : 'Dad'; }
+  // the people who can be chosen, in order, and their buttons on the start screen
+  var PEOPLE = ['dad', 'mum', 'dadi'], WHO_ID = { dad: 'whoDad', mum: 'whoMum', dadi: 'whoDadi' };
+  var PERSON_OF = { whoDad: 'dad', whoMum: 'mum', whoDadi: 'dadi' };
+  function withStories() { var r = []; for (var i = 0; i < PEOPLE.length; i++) if (hasStories(PEOPLE[i])) r.push(PEOPLE[i]); return r; }
+  function stepPerson(p, dir) {   // the next (or previous) person who has stories, wrapping round
+    var l = withStories(), i = 0;
+    for (var k = 0; k < l.length; k++) if (l[k] === p) i = k;
+    return l.length ? l[(i + dir + l.length) % l.length] : p;
+  }
 
   // ---- the landing music (browsers only allow sound after a button press, so the first press starts it)
   var musicOn = false, musicFade = null;
@@ -218,10 +227,10 @@
     removeClass($('startText'), 'wait');
   }
   function focusWho(p) {
-    if (!hasStories(p)) p = p === 'mum' ? 'dad' : 'mum';
+    if (!hasStories(p)) p = withStories()[0] || 'dad';
     startFocus = p;
-    $('whoDad').className = 'who' + (p === 'dad' ? ' focus' : '') + (hasStories('dad') ? '' : ' hidden');
-    $('whoMum').className = 'who' + (p === 'mum' ? ' focus' : '') + (hasStories('mum') ? '' : ' hidden');
+    for (var i = 0; i < PEOPLE.length; i++)
+      $(WHO_ID[PEOPLE[i]]).className = 'who' + (p === PEOPLE[i] ? ' focus' : '') + (hasStories(PEOPLE[i]) ? '' : ' hidden');
   }
   function showStart(withIntro) {
     stopAll(); mode = 'start'; current = -1;
@@ -292,7 +301,7 @@
 
   // ---- the menu: the chosen person's timeline; the first item switches to the other person
   var menuOpen = false, focusIdx = 0, wasPlaying = false, items = [];
-  function other() { return who === 'dad' ? 'mum' : 'dad'; }
+  function other() { return stepPerson(who, 1); }
   function buildMenu() {
     var html = '', lastDec = null;
     items = [];
@@ -369,7 +378,7 @@
     if (mode === 'start') {
       ev.preventDefault();
       if (introOn) { finishIntro(); return; }                // any press skips to the title
-      if (k === 37 || k === 39) { focusWho(startFocus === 'dad' ? 'mum' : 'dad'); return; }   // Left / Right: whose stories
+      if (k === 37 || k === 39) { focusWho(stepPerson(startFocus, k === 39 ? 1 : -1)); return; }   // Left / Right: whose stories
       if (ok) { choose(startFocus); play(firstStory); return; }
       if (k === 38 || k === 40) { openMenu(); return; }
       return;
@@ -397,7 +406,7 @@
     }
     if (mode === 'start') {
       if (introOn) { finishIntro(); return; }
-      if (ev.target.id === 'whoDad' || ev.target.id === 'whoMum') { focusWho(ev.target.id === 'whoDad' ? 'dad' : 'mum'); }
+      if (PERSON_OF[ev.target.id]) focusWho(PERSON_OF[ev.target.id]);
       choose(startFocus); play(firstStory); return;
     }
     if (mode === 'end') { showStart(false); return; }
@@ -408,8 +417,8 @@
       var t = ev.target;
       while (t && t !== document.body && !(t.className && /\bmi\b/.test(t.className))) t = t.parentNode;
       if (t && t !== document.body) { var i = +t.getAttribute('data-i'); if (i !== focusIdx) focusItem(i); }
-    } else if (mode === 'start' && !introOn && (ev.target.id === 'whoDad' || ev.target.id === 'whoMum')) {
-      focusWho(ev.target.id === 'whoDad' ? 'dad' : 'mum');
+    } else if (mode === 'start' && !introOn && PERSON_OF[ev.target.id]) {
+      focusWho(PERSON_OF[ev.target.id]);
     }
   });
 

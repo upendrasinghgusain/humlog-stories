@@ -40,13 +40,18 @@ MATCH_NOTE = ("The attached photograph shows the real place today. Repaint THIS 
               "replace modern things as the scene asks and leave out all people, cars, signs and writing. ")
 
 
-def generate(prompt: str, model: str, setting: str = "", refs: list | None = None, match: bool = False) -> bytes:
+FACE_NOTE = ("The attached photograph shows the real person. Use it only as a likeness reference for her or his face and "
+             "build, at the age the scene asks for; paint them in the style above. Do not copy the photograph. ")
+
+
+def generate(prompt: str, model: str, setting: str = "", refs: list | None = None, match: bool = False,
+             style: str | None = None, face: bool = False) -> bytes:
     parts = []
     for r in refs or []:
         p = pathlib.Path(r)
         mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
         parts.append({"inline_data": {"mime_type": mime, "data": base64.b64encode(p.read_bytes()).decode()}})
-    text = STYLE.replace("{setting}", setting + " " if setting else "") + ((MATCH_NOTE if match else REF_NOTE) if refs else "") + "Scene: " + prompt
+    text = (style or STYLE).replace("{setting}", setting + " " if setting else "") + ((FACE_NOTE if face else MATCH_NOTE if match else REF_NOTE) if refs else "") + "Scene: " + prompt
     body = {
         "contents": [{"parts": parts + [{"text": text}]}],
         "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "16:9"}},
@@ -77,6 +82,7 @@ def main() -> None:
     data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
     scenes = data["scenes"] if isinstance(data, dict) else data
     setting = data.get("setting", "") if isinstance(data, dict) else ""
+    style = data.get("style") if isinstance(data, dict) else None  # a chapter may replace the house style
     out = pathlib.Path(sys.argv[2])
     model = sys.argv[3] if len(sys.argv) > 3 else "gemini-3-pro-image"
     out.mkdir(parents=True, exist_ok=True)
@@ -86,7 +92,7 @@ def main() -> None:
             print("skip", target.name)
             continue
         # "refs": reference photos of the real place (private, never published), e.g. media/reference/...
-        target.write_bytes(generate(s["prompt"], model, setting, s.get("refs"), s.get("match", False)))
+        target.write_bytes(generate(s["prompt"], model, setting, s.get("refs"), s.get("match", False), style, s.get("face", False)))
         print("ok", target.name)
 
 
