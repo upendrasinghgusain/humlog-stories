@@ -74,10 +74,13 @@ def build_tv(data: dict) -> None:
     for sub in ("media", "photos"):
         if (SITE / sub).exists():
             shutil.copytree(SITE / sub, tv / sub, dirs_exist_ok=True)
+    if (SITE / "landing-music.m4a").exists():  # the start screen's music, as on the phone site
+        shutil.copy2(SITE / "landing-music.m4a", tv / "landing-music.m4a")
     chapters = []
     for c in data["chapters"]:
         c = dict(c)
-        mp4 = ROOT / "exports" / f"{c['title_en'].title()} - landscape.mp4"
+        safe = re.sub(r'\s*[<>:"/\|?*]+\s*', " - ", c["title_en"].title()).strip(" -")  # as tools/render_video.py names it
+        mp4 = ROOT / "exports" / f"{safe} - landscape.mp4"
         if mp4.exists():
             dst = tv / "chapters" / f"{c['id']}.mp4"
             if newer(mp4, dst):

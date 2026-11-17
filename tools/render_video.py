@@ -90,9 +90,19 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+# Ports Chrome refuses to open (net::ERR_UNSAFE_PORT); a random free port can land on one of these.
+UNSAFE_PORTS = {1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102, 103, 104, 109,
+                110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530,
+                531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045,
+                5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697, 10080}
+
+
 def serve(folder: pathlib.Path) -> int:
-    httpd = Server(("127.0.0.1", 0),
-                                            functools.partial(QuietHandler, directory=str(folder)))
+    while True:
+        httpd = Server(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(folder)))
+        if httpd.server_address[1] not in UNSAFE_PORTS:
+            break
+        httpd.server_close()
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd.server_address[1]
 
@@ -195,7 +205,8 @@ def main() -> None:
         total = min(total, a.seconds)
     n_frames = int(total * FPS)
     port = serve(folder)
-    title = story["title_en"].title()
+    # file name: no characters Windows forbids (a ":" would silently write into a hidden NTFS stream)
+    title = re.sub(r'\s*[<>:"/\|?*]+\s*', " - ", story["title_en"].title()).strip(" -")
 
     def parse(f):  # name=WxH[@scale]
         name, size = f.split("=")

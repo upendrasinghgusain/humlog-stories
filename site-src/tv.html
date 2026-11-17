@@ -10,7 +10,9 @@
   Served at /tv/stories/?key=... : Cloudflare skips the family login under /tv and checks the TV key
   on EVERY request, so every file this page loads gets ?key=... appended (same as Humlog's TV page).
   Old-style JavaScript only (var/function, no arrows, no modern syntax), no CSS grid, no maps:
-  the story plays as its finished video; voice moments play as audio with captions.
+  each story plays as its finished video (made by tools/render_video.py).
+  Start screen: the landing photo comes from black and white into colour, then the remote chooses
+  whose stories to play (Dad's or Mum's).
 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tiro+Devanagari+Hindi&family=Cormorant+Garamond:ital,wght@0,500;1,400&display=swap">
 <style>
@@ -20,33 +22,56 @@
   .hidden { display: none; }
   video { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #000; }
   .center { position: absolute; left: 0; right: 0; top: 50%; text-align: center; transform: translateY(-50%); -webkit-transform: translateY(-50%); padding: 0 8%; }
-  .photo { position: absolute; left: 50%; max-height: 42%; max-width: 50%; border-radius: 4px; box-shadow: 0 2vw 5vw rgba(0,0,0,.6); }
   .bgphoto { position: absolute; left: 50%; top: 50%; max-height: 80%; max-width: 70%; opacity: .28;
     transform: translate(-50%, -50%); -webkit-transform: translate(-50%, -50%); }
   .kicker { font-family: sans-serif; font-size: 1.6vw; letter-spacing: .3vw; text-transform: uppercase; color: #d9a45b; }
-  .title { font-size: 4.2vw; line-height: 1.35; margin-top: 1vw; }
-  .sub { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 2.6vw; color: rgba(243,237,226,.75); }
-  .hint { font-family: sans-serif; font-size: 1.5vw; color: rgba(243,237,226,.6); margin-top: 3vw; }
+  .title { font-size: 4.2vw; line-height: 1.35; margin-top: 1vw; text-shadow: 0 .3vw 2vw rgba(0,0,0,.9); }
+  .sub { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 2.6vw; color: rgba(243,237,226,.8);
+    text-shadow: 0 .3vw 2vw rgba(0,0,0,.9); }
+  .hint { font-family: sans-serif; font-size: 1.4vw; color: rgba(243,237,226,.6); margin-top: 2.6vw; text-shadow: 0 .2vw 1vw #000; }
   .ok { display: inline-block; margin-top: 3vw; padding: 1.2vw 3vw; border-radius: 4vw; background: #f3ede2; color: #0b0908;
     font-family: sans-serif; font-weight: bold; font-size: 1.6vw; letter-spacing: .2vw; }
-  #vTop { position: absolute; left: 0; right: 0; top: 5%; text-align: center; padding: 0 8%; }
-  #vTop .title { font-size: 3.2vw; }
-  #vTop .sub { font-size: 2.1vw; }
-  #vCap { position: absolute; left: 0; right: 0; bottom: 12%; text-align: center; padding: 0 10%; }
-  #vCap .who { font-family: sans-serif; font-size: 1.1vw; letter-spacing: .3vw; color: #d9a45b; margin-bottom: 1vw; }
-  #vCap .h { font-size: 3.1vw; line-height: 1.45; text-shadow: 0 .2vw 1.5vw #000; }
-  #vCap .e { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 2.2vw; color: rgba(243,237,226,.8); margin-top: .6vw; text-shadow: 0 .2vw 1.5vw #000; }
-  #vCap.iv .who { color: rgba(243,237,226,.5); }
-  #vCap.iv .h { font-size: 2.3vw; color: rgba(243,237,226,.7); }
-  #vCap.iv .e { font-size: 1.8vw; color: rgba(243,237,226,.5); }
-  .tag { position: absolute; right: 3%; bottom: 4%; font-family: sans-serif; font-size: 1vw; letter-spacing: .1vw; color: rgba(243,237,226,.5); text-transform: uppercase; }
-  #bar { position: absolute; left: 0; bottom: 0; height: .5vw; background: #d9a45b; width: 0; }
   #count { position: absolute; left: 3%; bottom: 4%; font-family: sans-serif; font-size: 1.2vw; color: rgba(243,237,226,.5); }
   #badge { position: absolute; left: 3%; top: 5%; font-family: sans-serif; font-size: 1.6vw; padding: .8vw 1.6vw; border-radius: 3vw;
-    background: rgba(0,0,0,.65); color: #f3ede2; }
-  .unclear { border-bottom: .15vw dotted #d9a45b; }
+    background: rgba(0,0,0,.65); color: #f3ede2; z-index: 20; }
 
-  /* menu: the timeline, on the left, operated with the remote */
+  /* ---- start screen: the landing photo, edged into the screen ---- */
+  #glow { position: absolute; left: -5%; top: -5%; width: 110%; height: 110%; background-size: cover; background-position: center;
+    -webkit-filter: blur(4vw) brightness(.24) grayscale(1); filter: blur(4vw) brightness(.24) grayscale(1);
+    -webkit-transition: -webkit-filter 4.5s ease-in-out; transition: filter 4.5s ease-in-out; }
+  #glow.colour { -webkit-filter: blur(4vw) brightness(.24) saturate(.6); filter: blur(4vw) brightness(.24) saturate(.6); }
+  /* the photo box keeps the photo's own shape (964 x 564); it only ever scales, never moves */
+  /* sized by the screen height (86vh tall, the photo's own shape), so it fits any screen shape */
+  #lp { position: absolute; left: 50%; top: 50%; width: 147vh; height: 86vh; margin-left: -73.5vh; margin-top: -43vh;
+    opacity: 0; -webkit-transition: opacity 3s ease, -webkit-transform 19s ease-in-out; transition: opacity 3s ease, transform 19s ease-in-out;
+    -webkit-transform: scale(1); transform: scale(1); }
+  #lp.in { opacity: 1; -webkit-transform: scale(1.08); transform: scale(1.08); }
+  #lpImg { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    -webkit-mask-image: radial-gradient(farthest-side at 50% 46%, #000 26%, rgba(0,0,0,.86) 40%, rgba(0,0,0,.62) 54%,
+      rgba(0,0,0,.38) 68%, rgba(0,0,0,.17) 82%, rgba(0,0,0,.05) 93%, transparent 100%);
+            mask-image: radial-gradient(farthest-side at 50% 46%, #000 26%, rgba(0,0,0,.86) 40%, rgba(0,0,0,.62) 54%,
+      rgba(0,0,0,.38) 68%, rgba(0,0,0,.17) 82%, rgba(0,0,0,.05) 93%, transparent 100%);
+    -webkit-filter: grayscale(1) blur(.6vw) brightness(.72); filter: grayscale(1) blur(.6vw) brightness(.72);
+    -webkit-transition: -webkit-filter 6s ease-out; transition: filter 6s ease-out; }
+  #lp.focus #lpImg { -webkit-filter: grayscale(1) blur(0) brightness(.9); filter: grayscale(1) blur(0) brightness(.9); }
+  #lp.colour #lpImg { -webkit-filter: grayscale(0) blur(0) brightness(.95) saturate(.85); filter: grayscale(0) blur(0) brightness(.95) saturate(.85);
+    -webkit-transition: -webkit-filter 4.5s ease-in-out; transition: filter 4.5s ease-in-out; }
+  #lp.dim #lpImg { -webkit-filter: grayscale(0) blur(0) brightness(.55) saturate(.8); filter: grayscale(0) blur(0) brightness(.55) saturate(.8);
+    -webkit-transition: -webkit-filter 2.5s ease; transition: filter 2.5s ease; }
+  .lpn { position: absolute; opacity: 0; text-align: center; white-space: nowrap; -webkit-transform: translateX(-50%); transform: translateX(-50%);
+    -webkit-transition: opacity 1.2s ease; transition: opacity 1.2s ease; text-shadow: 0 .2vw 1vw #000; }
+  .lpn.show { opacity: 1; }
+  .lpn b { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 500; font-size: 2.4vw; color: #f6f0e4; }
+  .lpn i { display: block; width: .12vw; height: 1.6vw; margin: 0 auto .5vw; background: #d9a45b; }
+  #startText { -webkit-transition: opacity 1.6s ease; transition: opacity 1.6s ease; }
+  #startText.wait { opacity: 0; }
+  .who { display: inline-block; margin: 2.4vw 1vw 0; padding: 1.2vw 2.6vw; border-radius: 4vw; font-family: sans-serif; font-weight: bold;
+    font-size: 1.6vw; letter-spacing: .15vw; border: .15vw solid rgba(243,237,226,.45); color: #f3ede2; background: rgba(11,9,8,.55); }
+  .who.focus { background: #f3ede2; color: #0b0908; border-color: #f3ede2; }
+  .who.hidden { display: none; }
+  #sound { position: absolute; left: 3%; bottom: 4%; font-family: sans-serif; font-size: 1.1vw; letter-spacing: .15vw; color: rgba(243,237,226,.55); }
+
+  /* ---- menu: the chosen person's timeline, on the left, operated with the remote ---- */
   #menu { position: absolute; left: 0; top: 0; bottom: 0; width: 44%; background: #15120f; z-index: 10;
     border-right: .15vw solid rgba(243,237,226,.1); box-shadow: 3vw 0 6vw rgba(0,0,0,.6); }
   .mhead { padding: 3vw 3vw 1.5vw; border-bottom: .1vw solid rgba(243,237,226,.1); }
@@ -59,6 +84,7 @@
   .mi.focus { background: rgba(217,164,91,.2); border-left-color: #d9a45b; }
   .mi.soon { opacity: .4; }
   .mi.soon.focus { opacity: .65; }
+  .mi.switch .mh { font-family: sans-serif; font-size: 1.5vw; color: #d9a45b; }
   .sc { font-size: .8vw; padding: .1vw .4vw; border: 1px solid #a89880; border-radius: .2vw; margin-left: .5vw; }
   .mw { font-family: sans-serif; font-size: 1.1vw; letter-spacing: .08vw; color: rgba(243,237,226,.55); }
   .st { font-size: .8vw; font-weight: bold; padding: .15vw .4vw; border-radius: .2vw; background: #d9a45b; color: #1b130a; margin-left: .5vw; }
@@ -69,24 +95,18 @@
 <body>
 
 <video id="video" class="hidden" preload="auto" playsinline></video>
-<audio id="audio" preload="auto"></audio>
-
-<div id="voice" class="layer hidden">
-  <img id="vPhoto" class="photo hidden" alt="">
-  <div id="vTop"><div class="kicker" id="vKicker"></div><div class="title" id="vTitle"></div><div class="sub" id="vSub"></div></div>
-  <div id="vCap"></div>
-  <div class="tag" id="vTag"></div>
-  <div id="bar"></div>
-</div>
+<audio id="music" preload="auto" loop></audio>
 
 <div id="start" class="layer">
-  <img id="startPhoto" class="bgphoto hidden" alt="">
-  <div class="center">
+  <div id="glow"></div>
+  <div id="lp"><img id="lpImg" alt=""></div>
+  <div class="center" id="startText">
     <div class="title" style="font-size:7vw">हम लोग</div>
-    <div class="sub">Dad, in his own voice</div>
-    <div class="ok">OK &nbsp;▶&nbsp; PLAY</div>
-    <div class="hint">▲ menu &nbsp;·&nbsp; ◀ ▶ previous / next &nbsp;·&nbsp; OK pause</div>
+    <div class="sub">A family's stories, in their own voices</div>
+    <div><span class="who" id="whoDad">DAD'S STORIES</span><span class="who" id="whoMum">MUM'S STORIES</span></div>
+    <div class="hint">◀ ▶ choose &nbsp;·&nbsp; OK play &nbsp;·&nbsp; ▲ menu &nbsp;·&nbsp; while playing: ◀ ▶ previous / next, OK pause</div>
   </div>
+  <div id="sound"></div>
 </div>
 
 <div id="end" class="layer hidden">
@@ -94,12 +114,12 @@
   <div class="center">
     <div class="title">अभी के लिए बस इतना</div>
     <div class="sub">That's all for now</div>
-    <div class="ok">OK &nbsp;▶&nbsp; START AGAIN</div>
+    <div class="ok">OK &nbsp;▶&nbsp; BACK TO THE START</div>
   </div>
 </div>
 
 <div id="menu" class="hidden">
-  <div class="mhead"><div class="mtitle">हम लोग</div><div class="mhint">▲ ▼ choose &nbsp;·&nbsp; OK play &nbsp;·&nbsp; ◀ close</div></div>
+  <div class="mhead"><div class="mtitle" id="mtitle">हम लोग</div><div class="mhint">▲ ▼ choose &nbsp;·&nbsp; OK play &nbsp;·&nbsp; ◀ close</div></div>
   <div id="mlist"></div>
 </div>
 
@@ -118,209 +138,284 @@
 (function () {
   var A = window.ARCHIVE;
   function $(id) { return document.getElementById(id); }
-  var video = $('video'), audio = $('audio');
+  var video = $('video'), music = $('music');
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function mark(s) {
-    return esc(s).replace(/\[\?(.+?)\?\]/g, '<span class="unclear">$1</span>').replace(/\[अस्पष्ट\]/g, '<span class="unclear">…</span>');
-  }
   function show(el, on) { el.className = el.className.replace(/\s*hidden/g, '') + (on ? '' : ' hidden'); }
+  function hasClass(el, c) { return (' ' + el.className + ' ').indexOf(' ' + c + ' ') >= 0; }
+  function addClass(el, c) { if (!hasClass(el, c)) el.className = (el.className + ' ' + c).replace(/^\s+/, ''); }
+  function removeClass(el, c) { el.className = (' ' + el.className + ' ').replace(' ' + c + ' ', ' ').replace(/^\s+|\s+$/g, ''); }
   function find(list, fn) { for (var i = 0; i < list.length; i++) if (fn(list[i])) return list[i]; return null; }
-  function photoBy(id) { return find(A.photos || [], function (p) { return p.id === id; }); }
   function photoFor(use) { return find(A.photos || [], function (p) { return (p.use || []).indexOf(use) >= 0; }); }
   function setPhoto(img, p) { if (p) { img.src = withKey(p.url); show(img, true); } else show(img, false); }
-
-  // ---- moments in date order (a story stands in for the events it covers), as on the main site
-  var covered = {};
-  A.chapters.forEach(function (c) { c.event_ids.forEach(function (id) { covered[id] = true; }); });
-  var scenes = [];
-  A.events.forEach(function (e) { if (!covered[e.id] && e.sources && e.sources.length) scenes.push({ kind: 'voice', year: e.year, ev: e }); });
-  A.chapters.forEach(function (c) { if (c.video) scenes.push({ kind: 'story', year: c.year, ch: c }); });
-  scenes.sort(function (a, b) { return ((a.year || 9999) - (b.year || 9999)) || (a.kind === 'story' ? -1 : 1); });
-  // Moments without a story yet stay in the menu, greyed out ("story coming"), but only stories play.
-  function storyFrom(i, dir) { for (var j = i; j >= 0 && j < scenes.length; j += dir) if (scenes[j].kind === 'story') return j; return -1; }
-  var firstStory = Math.max(0, storyFrom(0, 1));
-  var storyCount = 0;
-  for (var i = 0; i < scenes.length; i++) if (scenes[i].kind === 'story') storyCount++;
-  function storyNumber(i) { var n = 0; for (var j = 0; j <= i; j++) if (scenes[j].kind === 'story') n++; return n; }
   var recById = {};
   A.recordings.forEach(function (r) { recById[r.id] = r; });
-
-  setPhoto($('startPhoto'), photoFor('start'));
-
-  // ---- playback
-  var current = -1, passage = null, mode = 'start', nextTimer = null, lineIdx = -1;
-
+  function personOfChapter(c) { return c.person || 'dad'; }
+  function personOfEvent(e) { var r = recById[(e.sources[0] || {}).recording]; return (r && r.person) || 'dad'; }
   function whenText(e) {
     if (!e.year) return '';
     return (e.date_basis === 'stated' ? '' : 'c. ') + e.year + (e.year_end && e.year_end !== e.year ? '–' + e.year_end : '');
   }
+
+  // ---- whose stories: Dad's or Mum's (each has their own timeline, as on the phone site)
+  var who = 'dad', scenes = [], firstStory = 0, storyCount = 0;
+  function buildScenes() {
+    var covered = {};
+    A.chapters.forEach(function (c) { c.event_ids.forEach(function (id) { covered[id] = true; }); });
+    scenes = [];
+    A.events.forEach(function (e) {
+      if (!covered[e.id] && e.sources && e.sources.length && personOfEvent(e) === who) scenes.push({ kind: 'voice', year: e.year, ev: e });
+    });
+    A.chapters.forEach(function (c) { if (c.video && personOfChapter(c) === who) scenes.push({ kind: 'story', year: c.year, ch: c }); });
+    scenes.sort(function (a, b) { return ((a.year || 9999) - (b.year || 9999)) || (a.kind === 'story' ? -1 : 1); });
+    firstStory = Math.max(0, storyFrom(0, 1));
+    storyCount = 0;
+    for (var i = 0; i < scenes.length; i++) if (scenes[i].kind === 'story') storyCount++;
+  }
+  // Moments without a story yet stay in the menu, greyed out ("story coming"), but only stories play.
+  function storyFrom(i, dir) { for (var j = i; j >= 0 && j < scenes.length; j += dir) if (scenes[j].kind === 'story') return j; return -1; }
+  function storyNumber(i) { var n = 0; for (var j = 0; j <= i; j++) if (scenes[j].kind === 'story') n++; return n; }
+  function hasStories(p) { return !!find(A.chapters, function (c) { return c.video && personOfChapter(c) === p; }); }
+  function nameOf(p) { return p === 'mum' ? 'Mum' : 'Dad'; }
+
+  // ---- the landing music (browsers only allow sound after a button press, so the first press starts it)
+  var musicOn = false, musicFade = null;
+  if (A.landingMusic) music.src = withKey(A.landingMusic);
+  function fadeMusic(to, ms, then) {
+    clearInterval(musicFade);
+    var from = music.volume, t0 = new Date().getTime();
+    musicFade = setInterval(function () {
+      var k = Math.min((new Date().getTime() - t0) / ms, 1);
+      try { music.volume = from + (to - from) * k; } catch (x) {}
+      if (k >= 1) { clearInterval(musicFade); if (then) then(); }
+    }, 50);
+  }
+  function startMusic() {
+    if (!A.landingMusic || musicOn || mode !== 'start') return;
+    try {
+      music.volume = 0;
+      var pr = music.play();
+      musicOn = true; fadeMusic(0.55, 3500); $('sound').innerHTML = '♪';
+      if (pr && pr.then) pr.then(null, function () { musicOn = false; $('sound').innerHTML = ''; });
+    } catch (x) { musicOn = false; }
+  }
+  function stopMusic() {
+    if (!musicOn) return;
+    musicOn = false; $('sound').innerHTML = '';
+    fadeMusic(0, 1200, function () { try { music.pause(); } catch (x) {} });
+  }
+
+  // ---- start screen: soft black and white -> sharp, the names, colour at the very end, then the title
+  var land = photoFor('landing'), introTimers = [], introOn = false, startFocus = 'dad';
+  function T(ms, fn) { introTimers.push(setTimeout(fn, ms)); }
+  function stopIntro() { for (var i = 0; i < introTimers.length; i++) clearTimeout(introTimers[i]); introTimers = []; introOn = false; }
+  function finishIntro() {
+    stopIntro();
+    var lp = $('lp'); addClass(lp, 'in'); addClass(lp, 'focus'); addClass(lp, 'colour'); addClass(lp, 'dim');
+    addClass($('glow'), 'colour');
+    var ns = $('lp').getElementsByTagName('div');
+    for (var i = 0; i < ns.length; i++) removeClass(ns[i], 'show');
+    removeClass($('startText'), 'wait');
+  }
+  function focusWho(p) {
+    if (!hasStories(p)) p = p === 'mum' ? 'dad' : 'mum';
+    startFocus = p;
+    $('whoDad').className = 'who' + (p === 'dad' ? ' focus' : '') + (hasStories('dad') ? '' : ' hidden');
+    $('whoMum').className = 'who' + (p === 'mum' ? ' focus' : '') + (hasStories('mum') ? '' : ' hidden');
+  }
+  function showStart(withIntro) {
+    stopAll(); mode = 'start'; current = -1;
+    show(video, false); show($('end'), false); show($('start'), true);
+    $('count').innerHTML = '';
+    focusWho(startFocus);
+    if (!land) { show($('lp'), false); return; }
+    var lp = $('lp');
+    if (!$('lpImg').getAttribute('src')) {
+      $('lpImg').src = withKey(land.url);
+      $('glow').style.backgroundImage = 'url("' + withKey(land.url) + '")';
+      var html = '';
+      (land.faces || []).forEach(function (f) {
+        html += '<div class="lpn" style="left:' + (f.x * 100) + '%;top:' + ((f.y + 0.12) * 100) + '%"><i></i><b>' + esc(f.name) + '</b></div>';
+      });
+      lp.insertAdjacentHTML('beforeend', html);
+    }
+    if (!withIntro) { finishIntro(); return; }
+    introOn = true;
+    addClass($('startText'), 'wait');
+    var go = function () {
+      T(60, function () { addClass(lp, 'in'); });                        // out of the dark, slowly moving closer
+      T(1200, function () { addClass(lp, 'focus'); });                   // sharpens, still black and white
+      T(8000, function () { var ns = lp.getElementsByTagName('div'); for (var i = 0; i < ns.length; i++) addClass(ns[i], 'show'); });
+      T(12300, function () { var ns = lp.getElementsByTagName('div'); for (var i = 0; i < ns.length; i++) removeClass(ns[i], 'show'); });
+      T(13200, function () { addClass(lp, 'colour'); addClass($('glow'), 'colour'); });   // only now the colour
+      T(18500, finishIntro);                                              // then the title and the choice
+    };
+    var img = $('lpImg');
+    if (img.complete) go(); else img.onload = go;
+  }
+
+  // ---- playback
+  var current = -1, mode = 'start', nextTimer = null;
   function stopAll() {
     clearTimeout(nextTimer);
     try { video.pause(); } catch (x) {}
-    try { audio.pause(); } catch (x) {}
-    passage = null;
   }
   function badge(text) {
     var b = $('badge'); b.innerHTML = text; show(b, true);
     clearTimeout(badge.t); badge.t = setTimeout(function () { show(b, false); }, 2500);
   }
-
+  function choose(p) {
+    if (p !== who) { who = p; buildScenes(); buildMenu(); }
+  }
   function play(i) {
     if (i < 0 || i >= scenes.length || scenes[i].kind !== 'story') return;
-    stopAll();
+    stopAll(); stopIntro(); stopMusic();
     current = i; mode = 'playing';
     show($('start'), false); show($('end'), false);
-    $('count').innerHTML = storyNumber(i) + ' / ' + storyCount + ' &nbsp;·&nbsp; ▲ menu';
-    var s = scenes[i];
-    if (s.kind === 'story') {
-      show($('voice'), false); show(video, true);
-      video.src = withKey(s.ch.video);
-      video.load(); video.play();
-    } else {
-      show(video, false); show($('voice'), true);
-      var e = s.ev, src = e.sources[0], r = recById[src.recording];
-      $('vKicker').innerHTML = esc([whenText(e)].concat(e.places || []).join(' · '));
-      $('vTitle').innerHTML = esc(e.title_hi);
-      $('vSub').innerHTML = esc(e.title_en);
-      $('vCap').innerHTML = ''; $('bar').style.width = '0';
-      var p = photoBy((e.photos || [])[0]);
-      setPhoto($('vPhoto'), p);
-      $('vPhoto').style.top = '27%';
-      $('vPhoto').style.webkitTransform = $('vPhoto').style.transform = 'translateX(-50%)';
-      $('vTag').innerHTML = p ? esc('Photograph · ' + p.date) : 'From the interview · AI transcript, not yet checked';
-      passage = { rec: r, start: src.start, end: src.end };
-      lineIdx = -1;
-      var url = withKey(r.file);
-      var go = function () { try { audio.currentTime = Math.max(src.start - 0.3, 0); } catch (x) {} audio.play(); };
-      if (audio.getAttribute('data-src') !== url) {
-        audio.setAttribute('data-src', url); audio.src = url;
-        audio.addEventListener('loadedmetadata', function once() { audio.removeEventListener('loadedmetadata', once); go(); });
-        audio.load();
-      } else go();
-    }
+    $('count').innerHTML = nameOf(who) + ' &nbsp;·&nbsp; ' + storyNumber(i) + ' / ' + storyCount + ' &nbsp;·&nbsp; ▲ menu';
+    show(video, true);
+    video.src = withKey(scenes[i].ch.video);
+    video.load(); video.play();
   }
   function next() {
     var n = storyFrom(current + 1, 1);
     if (n >= 0) return play(n);
     stopAll(); mode = 'end';
-    show(video, false); show($('voice'), false); show($('end'), true);
-    setPhoto($('endPhoto'), photoFor('end'));
+    show(video, false); show($('end'), true);
+    setPhoto($('endPhoto'), photoFor(who === 'dad' ? 'end' : 'end-' + who) || photoFor('end'));
     $('count').innerHTML = '';
   }
   function togglePause() {
-    var el = (scenes[current] && scenes[current].kind === 'story') ? video : audio;
-    if (el.paused) { el.play(); badge('▶'); } else { el.pause(); badge('❚❚ Paused'); }
+    if (video.paused) { video.play(); badge('▶'); } else { video.pause(); badge('❚❚ Paused'); }
   }
-
   video.addEventListener('ended', function () { nextTimer = setTimeout(next, 1200); });
-  audio.addEventListener('timeupdate', function () {
-    if (!passage) return;
-    var t = audio.currentTime, p = passage;
-    if (t > p.end + 0.6) { audio.pause(); passage = null; nextTimer = setTimeout(next, 1800); return; }
-    $('bar').style.width = Math.max(0, Math.min(100, (t - p.start) / (p.end - p.start) * 100)) + '%';
-    var segs = p.rec.segments;
-    for (var i = 0; i < segs.length; i++) {
-      if (t >= segs[i].start && t < segs[i].end + 0.4) {
-        if (i !== lineIdx) {
-          lineIdx = i;
-          var s = segs[i], dad = s.speaker === 'DAD';
-          $('vCap').className = dad ? '' : 'iv';
-          $('vCap').innerHTML = '<div class="who">' + (dad ? 'DAD' : 'QUESTION') + '</div><div class="h">' + mark(s.text_hi) +
-            '</div><div class="e">' + mark(s.text_en) + '</div>';
-        }
-        break;
-      }
-    }
-  });
 
-  // ---- the menu: the same timeline as the phone site, driven by the remote
-  var menuOpen = false, focusIdx = 0, wasPlaying = false;
-  (function buildMenu() {
+  // ---- the menu: the chosen person's timeline; the first item switches to the other person
+  var menuOpen = false, focusIdx = 0, wasPlaying = false, items = [];
+  function other() { return who === 'dad' ? 'mum' : 'dad'; }
+  function buildMenu() {
     var html = '', lastDec = null;
+    items = [];
+    if (hasStories(other())) {
+      items.push({ kind: 'switch' });
+      html += '<div class="mi switch" data-i="0"><div class="mh">⇄ &nbsp;' + nameOf(other()).toUpperCase() + "'S STORIES</div></div>";
+    }
     scenes.forEach(function (s, i) {
       var dec = s.year ? Math.floor(s.year / 10) * 10 + 's' : 'Date not known';
       if (dec !== lastDec) { html += '<div class="dec">' + dec + '</div>'; lastDec = dec; }
-      var hi = s.kind === 'story' ? s.ch.title_hi : s.ev.title_hi;
-      var en = s.kind === 'story' ? s.ch.title_en : s.ev.title_en;
-      var when = s.kind === 'story' ? s.ch.when : whenText(s.ev);
-      html += '<div class="mi' + (s.kind === 'story' ? '' : ' soon') + '" data-i="' + i + '"><div class="mw">' + esc(when) +
-        (s.kind === 'story' ? ' <span class="st">STORY</span>' : ' <span class="sc">STORY COMING</span>') + '</div><div class="mh">' + esc(hi) +
+      var story = s.kind === 'story';
+      var hi = story ? s.ch.title_hi : s.ev.title_hi, en = story ? s.ch.title_en : s.ev.title_en;
+      var when = story ? s.ch.when : whenText(s.ev);
+      html += '<div class="mi' + (story ? '' : ' soon') + '" data-i="' + items.length + '"><div class="mw">' + esc(when) +
+        (story ? ' <span class="st">STORY</span>' : ' <span class="sc">STORY COMING</span>') + '</div><div class="mh">' + esc(hi) +
         '</div><div class="me">' + esc(en) + '</div></div>';
+      items.push({ kind: s.kind, scene: i });
     });
     $('mlist').innerHTML = html;
-  })();
-  function menuItems() { return $('mlist').getElementsByClassName('mi'); }
+    $('mtitle').innerHTML = esc(nameOf(who) + "'s stories");
+  }
+  function menuEls() { return $('mlist').getElementsByClassName('mi'); }
+  function itemOfScene(i) { for (var j = 0; j < items.length; j++) if (items[j].scene === i) return j; return 0; }
   function focusItem(i) {
-    var items = menuItems();
-    focusIdx = Math.max(0, Math.min(items.length - 1, i));
-    for (var j = 0; j < items.length; j++) {
-      items[j].className = 'mi' + (scenes[j].kind === 'story' ? '' : ' soon') + (j === focusIdx ? ' focus' : '') + (j === current ? ' now' : '');
+    var els = menuEls();
+    focusIdx = Math.max(0, Math.min(els.length - 1, i));
+    for (var j = 0; j < els.length; j++) {
+      var it = items[j];
+      els[j].className = 'mi' + (it.kind === 'switch' ? ' switch' : it.kind === 'story' ? '' : ' soon') +
+        (j === focusIdx ? ' focus' : '') + (it.scene === current && current >= 0 ? ' now' : '');
     }
     // keep the highlighted item in view (old browsers: adjust scrollTop by hand)
-    var box = $('mlist'), el = items[focusIdx];
+    var box = $('mlist'), el = els[focusIdx];
     if (el.offsetTop - 120 < box.scrollTop) box.scrollTop = el.offsetTop - 120;
     else if (el.offsetTop + el.offsetHeight + 120 > box.scrollTop + box.clientHeight)
       box.scrollTop = el.offsetTop + el.offsetHeight + 120 - box.clientHeight;
   }
   function openMenu() {
-    var el = (scenes[current] && scenes[current].kind === 'story') ? video : audio;
-    wasPlaying = mode === 'playing' && !el.paused;
-    if (wasPlaying) el.pause();
+    if (mode === 'start') { if (introOn) finishIntro(); choose(startFocus); }
+    wasPlaying = mode === 'playing' && !video.paused;
+    if (wasPlaying) video.pause();
     menuOpen = true; show($('menu'), true);
-    focusItem(current >= 0 ? current : firstStory);
+    focusItem(itemOfScene(current >= 0 ? current : firstStory));
   }
   function closeMenu(resume) {
     menuOpen = false; show($('menu'), false);
-    if (resume && wasPlaying) {
-      var el = (scenes[current] && scenes[current].kind === 'story') ? video : audio;
-      el.play();
+    if (resume && wasPlaying) video.play();
+  }
+  function activate(j) {
+    var it = items[j];
+    if (!it) return;
+    if (it.kind === 'switch') {
+      choose(other()); startFocus = who;
+      focusItem(itemOfScene(firstStory));
+      badge(nameOf(who) + "'s stories");
+      return;
     }
+    if (it.kind === 'story') { closeMenu(false); play(it.scene); } else badge('Story coming');
   }
 
   // ---- remote control (codes as observed on the parents' LG, see Humlog docs/tv-remote.md)
   document.addEventListener('keydown', function (ev) {
     var k = ev.keyCode;
     var ok = k === 13 || k === 415 || k === 19 || k === 32;   // OK / Play / Pause / space
+    startMusic();                                            // the first press is allowed to start the sound
     if (menuOpen) {
       ev.preventDefault();
       if (k === 38) focusItem(focusIdx - 1);                 // Up
       else if (k === 40) focusItem(focusIdx + 1);            // Down
-      else if (ok) {                                         // OK: play the highlighted story
-        if (scenes[focusIdx].kind === 'story') { closeMenu(false); play(focusIdx); } else badge('Story coming');
-      }
+      else if (ok) activate(focusIdx);                       // OK
       else if (k === 37 || k === 461) closeMenu(true);       // Left / Back: close, carry on
       return;
     }
-    if (ok) {
+    if (mode === 'start') {
       ev.preventDefault();
-      if (mode === 'start' || mode === 'end') return play(firstStory);
-      return togglePause();
+      if (introOn) { finishIntro(); return; }                // any press skips to the title
+      if (k === 37 || k === 39) { focusWho(startFocus === 'dad' ? 'mum' : 'dad'); return; }   // Left / Right: whose stories
+      if (ok) { choose(startFocus); play(firstStory); return; }
+      if (k === 38 || k === 40) { openMenu(); return; }
+      return;
     }
+    if (mode === 'end') {
+      ev.preventDefault();
+      if (ok) showStart(false);
+      else if (k === 38 || k === 40) openMenu();
+      return;
+    }
+    if (ok) { ev.preventDefault(); return togglePause(); }
     if (k === 38 || k === 40) { ev.preventDefault(); openMenu(); return; }   // Up / Down: menu
-    if (k === 39) { ev.preventDefault(); if (mode === 'playing') { badge('Next ▶'); next(); } return; }
-    if (k === 37) { ev.preventDefault(); var pv = storyFrom(current - 1, -1); if (mode === 'playing' && pv >= 0) { badge('◀ Previous'); play(pv); } return; }
+    if (k === 39) { ev.preventDefault(); badge('Next ▶'); next(); return; }
+    if (k === 37) { ev.preventDefault(); var pv = storyFrom(current - 1, -1); if (pv >= 0) { badge('◀ Previous'); play(pv); } return; }
+    if (k === 461) { ev.preventDefault(); showStart(false); }                 // Back: to the start screen
   });
-  // the Magic Remote pointer: click a menu item to play it; elsewhere a click acts like OK
+  // the Magic Remote pointer: click a menu item or a name; elsewhere a click acts like OK
   document.addEventListener('click', function (ev) {
+    startMusic();
     var t = ev.target;
     while (t && t !== document.body && !(t.className && /\bmi\b/.test(t.className))) t = t.parentNode;
     if (menuOpen) {
-      if (t && t !== document.body) {
-        var ci = +t.getAttribute('data-i');
-        if (scenes[ci].kind === 'story') { closeMenu(false); play(ci); } else badge('Story coming');
-      }
-      else closeMenu(true);
+      if (t && t !== document.body) activate(+t.getAttribute('data-i')); else closeMenu(true);
       return;
     }
-    if (mode === 'playing') togglePause(); else play(firstStory);
+    if (mode === 'start') {
+      if (introOn) { finishIntro(); return; }
+      if (ev.target.id === 'whoDad' || ev.target.id === 'whoMum') { focusWho(ev.target.id === 'whoDad' ? 'dad' : 'mum'); }
+      choose(startFocus); play(firstStory); return;
+    }
+    if (mode === 'end') { showStart(false); return; }
+    togglePause();
   });
   document.addEventListener('mousemove', function (ev) {     // pointer hover moves the highlight
-    if (!menuOpen) return;
-    var t = ev.target;
-    while (t && t !== document.body && !(t.className && /\bmi\b/.test(t.className))) t = t.parentNode;
-    if (t && t !== document.body) { var i = +t.getAttribute('data-i'); if (i !== focusIdx) focusItem(i); }
+    if (menuOpen) {
+      var t = ev.target;
+      while (t && t !== document.body && !(t.className && /\bmi\b/.test(t.className))) t = t.parentNode;
+      if (t && t !== document.body) { var i = +t.getAttribute('data-i'); if (i !== focusIdx) focusItem(i); }
+    } else if (mode === 'start' && !introOn && (ev.target.id === 'whoDad' || ev.target.id === 'whoMum')) {
+      focusWho(ev.target.id === 'whoDad' ? 'dad' : 'mum');
+    }
   });
+
+  buildScenes(); buildMenu();
+  showStart(true);
+  startMusic();   // in case the TV allows sound without a press
   window.focus();
 })();
 </script>
