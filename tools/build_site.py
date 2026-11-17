@@ -193,8 +193,13 @@ def main() -> None:
     for e in events:
         e["photos"] = [p["id"] for p in photos if e["id"] in p["events"]]
 
+    # optional music under the landing screen (private file, kept out of the repository)
+    landing_music = None
+    if (ROOT / "media" / "landing-music.m4a").exists():
+        shutil.copy2(ROOT / "media" / "landing-music.m4a", SITE / "landing-music.m4a")
+        landing_music = stamp("landing-music.m4a")
     data = {"version": VER, "people": PEOPLE, "recordings": recordings, "events": events, "chapters": chapters, "photos": photos,
-            "note": NOTE}
+            "note": NOTE, "landingMusic": landing_music}
     (SITE / "data.js").write_text("window.ARCHIVE = " + json.dumps(data, ensure_ascii=False) + ";\n", encoding="utf-8")
     size = sum(f.stat().st_size for f in SITE.rglob("*") if f.is_file()) / 1e6
     print(f"site/: {len(recordings)} recordings, {len(events)} events, {len(chapters)} chapters, {size:.1f} MB")

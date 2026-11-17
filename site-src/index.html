@@ -102,7 +102,8 @@
   /* only the zoom is animated: an animated percentage translate is fixed at 0 while the image is still loading,
      which left the photo hanging off the bottom-right corner */
   @keyframes photodrift { from { scale: 1; } to { scale: 1.09; } }  /* never comes to rest */
-  .start .photo-bg .lp.drift { animation: photodrift 26s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+  .start .photo-bg .lp.drift { animation: lpdrift 24s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+  @keyframes lpdrift { from { scale: 1; } to { scale: 1.04; } }
   .photo-tag { position: absolute; right: 14px; bottom: calc(86px + var(--safe-b)); z-index: 2; font: 500 10px/1.3 var(--ui);
     letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); padding: 5px 9px; border: 1px solid var(--line);
     border-radius: 999px; background: rgba(11,9,8,.6); max-width: 70vw; }
@@ -120,14 +121,27 @@
   .start .photo-bg .lp { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
   .start .photo-bg .lp img.pt, .start .photo-bg .lp img.ph { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
     max-width: none; max-height: none; transform: none; animation: none; box-shadow: none; border-radius: 0;
-    -webkit-mask-image: radial-gradient(ellipse 74% 72% at 50% 50%, #000 60%, transparent 100%);
-            mask-image: radial-gradient(ellipse 74% 72% at 50% 50%, #000 60%, transparent 100%);
+    -webkit-mask-image: radial-gradient(farthest-side at 50% 46%, #000 26%, rgba(0,0,0,.86) 40%, rgba(0,0,0,.62) 54%, rgba(0,0,0,.38) 68%, rgba(0,0,0,.17) 82%, rgba(0,0,0,.05) 93%, transparent 100%);
+            mask-image: radial-gradient(farthest-side at 50% 46%, #000 26%, rgba(0,0,0,.86) 40%, rgba(0,0,0,.62) 54%, rgba(0,0,0,.38) 68%, rgba(0,0,0,.17) 82%, rgba(0,0,0,.05) 93%, transparent 100%);
     transition: opacity 6s ease-in-out, filter 2s ease; }
   .start .photo-bg .lp img.pt { filter: brightness(.92); }
-  .start .photo-bg .lp img.ph { opacity: 0; filter: saturate(.8) sepia(.1) brightness(.92); }
-  .start .photo-bg .lp.photo img.ph { opacity: 1; }
-  .start .photo-bg .lp.photo img.pt { opacity: 0; }
-  .start .photo-bg .lp.dim img.ph { filter: saturate(.8) sepia(.1) brightness(.6); }
+  /* the photo begins as a soft, out-of-focus black-and-white print and slowly comes into colour and focus */
+  .start .photo-bg .lp { opacity: 0; transition: opacity 3s ease; }
+  .start .photo-bg .lp.in { opacity: 1; }
+  .start .photo-bg .lp img.pt { display: none; }
+  /* soft black and white -> sharp black and white (held as long as possible) -> colour only at the very end */
+  .start .photo-bg .lp img.ph { filter: grayscale(1) blur(8px) brightness(.72) contrast(.92) sepia(0) saturate(1);
+    transition: filter 6s ease-out; }
+  .start .photo-bg .lp.focus img.ph { filter: grayscale(1) blur(0) brightness(.9) contrast(1.04) sepia(0) saturate(1); }
+  .start .photo-bg .lp.photo img.ph { filter: grayscale(0) blur(0) brightness(.95) contrast(1) sepia(.08) saturate(.85);
+    transition: filter 4.5s ease-in-out; }
+  .start .photo-bg .lp.dim img.ph { filter: grayscale(0) blur(0) brightness(.6) saturate(.8) sepia(.1) contrast(1); transition: filter 2.5s ease; }
+  .start.landing .photo-bg .blur { filter: blur(48px) brightness(.24) saturate(.6); transition: filter 4.5s ease-in-out; }
+  .start.landing .photo-bg.bw .blur { filter: blur(48px) brightness(.24) grayscale(1); }
+  .start .lp-sound { position: absolute; left: max(16px, 4vw); bottom: calc(22px + var(--safe-b)); z-index: 7; pointer-events: auto;
+    font: 500 11px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); cursor: pointer;
+    background: rgba(11,9,8,.55); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
+  .start .lp-sound[aria-pressed="true"] { color: var(--amber); }
   /* the spotlight: everything but one face softly blurred and dimmed; it glides from face to face */
   @property --sx { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
   @property --sy { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
@@ -424,6 +438,7 @@
   }
 
   function playScene(i) {
+    stopLandingMusic(1200);  // the landing cello steps aside for the story
     if (i < 0 || i >= scenes.length) return;
     stopAll(); closeMenu(); $("tx").classList.remove("open");
     current = i; autoNext = true;
@@ -541,55 +556,116 @@
 
   // ------------------------------------------------ start screen (per person)
   $("go").onclick = () => { enterFS(); playScene(firstStory >= 0 ? firstStory : 0); };
-  // ---- landing intro (see the .lp styles)
+  // ---- landing intro: from black, a soft black-and-white print slowly comes into colour and focus while the
+  // camera moves closer; the names fade in and out; then the title. A quiet solo cello plays underneath.
   let introTimers = [], introFinish = null;
   function stopIntro() { introTimers.forEach(clearTimeout); introTimers = []; introFinish = null; $("start").classList.remove("intro"); }
-  function landingIntro(p, painted) {
+
+  // The cello: browsers only allow sound after the visitor has tapped or clicked, so if it cannot start by itself
+  // it starts on the first tap; the Sound button turns it on and off; it fades out when a story starts.
+  const landingMusic = A.landingMusic ? Object.assign(new Audio(A.landingMusic), { loop: true, volume: 0 }) : null;
+  let musicWanted = true, musicFade = null;
+  const fadeMusic = (to, ms, then) => {
+    clearInterval(musicFade); const from = landingMusic.volume, t0 = performance.now();
+    musicFade = setInterval(() => {
+      const k = Math.min((performance.now() - t0) / ms, 1); landingMusic.volume = from + (to - from) * k;
+      if (k >= 1) { clearInterval(musicFade); if (then) then(); }
+    }, 50);
+  };
+  const soundBtn = () => $("start").querySelector(".lp-sound");
+  const markSound = on => { const b = soundBtn(); if (b) { b.setAttribute("aria-pressed", on); b.textContent = on ? "♪ Sound on" : "♪ Sound off"; } };
+  function startLandingMusic() {
+    if (!landingMusic || !musicWanted || !$("start").classList.contains("landing")) return;
+    landingMusic.play().then(() => { fadeMusic(0.55, 3500); markSound(true); }).catch(() => markSound(false));
+  }
+  function stopLandingMusic(ms = 1500) {
+    if (landingMusic && !landingMusic.paused) fadeMusic(0, ms, () => landingMusic.pause());
+    markSound(false);
+  }
+  addEventListener("pointerdown", ev => {
+    if (ev.target.closest(".lp-sound, .go, .resume")) return;
+    if (landingMusic && landingMusic.paused && musicWanted) startLandingMusic();
+  }, { capture: true });
+
+  function landingIntro(p) {
     const slot = $("startPhoto"), faces = p.faces || [];
     slot.innerHTML = `<div class="blur" style="background-image:url('${esc(p.url)}')"></div><div class="lp">` +
-      `<img class="pt" src="${esc((painted || p).url)}" alt=""><img class="ph" src="${esc(p.url)}" alt="${esc(p.caption)}">` +
-      `<div class="spot"></div>` +
+      `<img class="ph" src="${esc(p.url)}" alt="${esc(p.caption)}">` +
       faces.map(f => `<div class="lp-n" style="left:${f.x * 100}%;top:${(f.y + 0.12) * 100}%"><b>${esc(f.name)}</b></div>`).join("") +
       `</div><button class="lp-skip" type="button">Skip intro</button>`;
     $("startPhotoTag").textContent = photoTag(p); slot.hidden = false; $("startPhotoTag").hidden = false;
-    const lp = slot.querySelector(".lp"), ph = slot.querySelector(".ph"), spot = slot.querySelector(".spot");
+    slot.classList.add("bw");
+    if (landingMusic && !soundBtn()) {
+      $("start").insertAdjacentHTML("beforeend", '<button class="lp-sound" type="button" aria-pressed="false">♪ Sound off</button>');
+      soundBtn().onclick = ev => {
+        ev.stopPropagation();
+        musicWanted = landingMusic.paused;
+        if (musicWanted) startLandingMusic(); else stopLandingMusic(600);
+      };
+    }
+    const lp = slot.querySelector(".lp"), ph = slot.querySelector(".ph");
     const names = [...slot.querySelectorAll(".lp-n")];
     const box = () => {
       const sw = slot.clientWidth, sh = slot.clientHeight, ar = (ph.naturalWidth / ph.naturalHeight) || 1.54;
-      let w = Math.min(sw * 0.86, 920), h = w / ar;
-      if (h > sh * 0.7) { h = sh * 0.7; w = h * ar; }
+      let w = Math.min(sw * 0.98, 1250), h = w / ar;
+      if (h > sh * 0.86) { h = sh * 0.86; w = h * ar; }
       lp.style.width = w + "px"; lp.style.height = h + "px";
-      spot.style.setProperty("--r0", w * 0.06 + "px"); spot.style.setProperty("--r1", w * 0.15 + "px");
       return { sw, sh, w, h };
     };
     // px translate + scale only (an animated % translate misplaces images that are still loading)
-    const full = (ms, sc = 1) => {
+    let aim = { sc: 1, until: 0 };  // where the camera is heading, and when it gets there
+    const full = (ms, sc = 1, ease = "ease-in-out") => {
       const b = box();
-      lp.style.transition = ms ? `transform ${ms}ms ease-out` : "none";
+      aim = { sc, until: performance.now() + ms };
+      lp.style.transition = (ms ? `transform ${ms}ms ${ease}, ` : "") + "opacity 3s ease";
       lp.style.transform = `translate(${(b.sw - b.w * sc) / 2}px, ${(b.sh - b.h * sc) / 2}px) scale(${sc})`;
     };
+    // if the screen area changes size (a browser bar appears, a phone's address bar slides away), glide the photo
+    // to its new centre straight away, keeping the same move - instead of a jump when the intro ends
+    if (window.ResizeObserver) {
+      let first = true;
+      new ResizeObserver(() => {
+        if (first) { first = false; return; }
+        if (!slot.contains(lp)) return;
+        full(Math.max(aim.until - performance.now(), 700), aim.sc);
+      }).observe(slot);
+    }
     const T = (ms, fn) => introTimers.push(setTimeout(fn, ms));
+    let zoomed = 1;
     introFinish = () => {
-      stopIntro(); lp.classList.add("photo", "dim"); spot.classList.remove("on");
-      names.forEach(n => n.classList.remove("show")); slot.querySelector(".lp-skip")?.remove();
-      full(0); lp.classList.add("drift");  // then a slow drift in and out that never stops
+      stopIntro(); lp.classList.add("in", "focus", "photo", "dim"); slot.classList.remove("bw"); names.forEach(n => n.classList.remove("show"));
+      const skip = slot.querySelector(".lp-skip"); if (skip) skip.remove();
+      // then a slow drift in and out that never stops - the same centred camera move as the intro, so nothing jumps
+      // (a separate "scale" drift would zoom about another point and shift the picture at the hand-over)
+      let out = true;
+      const breathe = () => { full(26000, out ? zoomed + 0.045 : zoomed); out = !out; T(26000, breathe); };
+      full(1200, zoomed); T(1250, breathe);
     };
     full(0);
-    if (!faces.length || matchMedia("(prefers-reduced-motion: reduce)").matches) { introFinish(); return; }
+    startLandingMusic();
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { introFinish(); return; }
     $("start").classList.add("intro");
     const finish = introFinish;
-    Promise.all([...slot.querySelectorAll(".lp img")].map(i => i.decode().catch(() => {}))).then(() => {
+    ph.decode().catch(() => {}).then(() => {
       if (introFinish !== finish) return;  // skipped or replaced meanwhile
       full(0);
-      T(1500, () => lp.classList.add("photo"));            // painting dissolves into the photograph
-      T(7800, () => names.forEach(n => n.classList.add("show")));     // all four names come up together, slowly
-      T(11800, () => names.forEach(n => n.classList.remove("show")));  // and slowly go again
-      T(13300, () => introFinish && introFinish());                    // then the title
+      requestAnimationFrame(() => {
+        lp.classList.add("in");                                        // out of the dark
+        zoomed = 1.1; full(19000, zoomed);                             // the camera slowly moves closer
+        T(1200, () => lp.classList.add("focus"));                      // the soft print sharpens, still black and white
+        T(8000, () => names.forEach(n => n.classList.add("show")));    // the names, together
+        T(12300, () => names.forEach(n => n.classList.remove("show")));
+        T(13200, () => { lp.classList.add("photo"); slot.classList.remove("bw"); });  // only now does the colour come in (4.5 s)
+        T(18500, () => { if (introFinish) introFinish(); });          // then the title
+      });
     });
   }
   $("start").addEventListener("click", ev => { if (introFinish && !ev.target.closest(".go, .resume")) introFinish(); });
   addEventListener("keydown", () => introFinish && introFinish());
-  addEventListener("resize", () => introFinish && introFinish());
+  // only a real change of shape (e.g. turning a phone) cuts the intro short; a phone's address bar sliding
+  // away or a toolbar appearing also fires "resize", and must not skip it
+  let introW = innerWidth;
+  addEventListener("resize", () => { if (introFinish && Math.abs(innerWidth - introW) > 80) introFinish(); introW = innerWidth; });
 
   function showStart(linkedId) {
     const person = A.people.find(p => p.id === who);
@@ -598,7 +674,7 @@
     $("startBy").textContent = `${scenes.length} ${scenes.length === 1 ? "story" : "stories"} from ${convs} ${convs === 1 ? "conversation" : "conversations"}`;
     stopIntro();
     const lpPhoto = landing && usePhoto("landing");
-    if (lpPhoto) landingIntro(lpPhoto, usePhoto("landing-painted")); else showPhoto("startPhoto", "startPhotoTag", startPhotoFor());
+    if (lpPhoto) landingIntro(lpPhoto); else { $("startPhoto").classList.remove("bw"); showPhoto("startPhoto", "startPhotoTag", startPhotoFor()); stopLandingMusic(); }
     $("start").classList.toggle("landing", !!lpPhoto);
     if (lpPhoto) $("startWho").textContent = "A family's stories, in their own voices";
     // a shared link (#story-id) or where you left off last time
