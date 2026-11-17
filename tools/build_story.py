@@ -142,7 +142,11 @@ def main() -> None:
                         "-filter_complex", "[0]asplit[a][b];[b]areverse[r];[a][r]concat=n=2:v=0:a=1",
                         str(tmp / "tone.wav")], check=True)  # forward+reversed = seamless loop
         subprocess.run([FFMPEG, "-v", "error", "-stream_loop", "-1", "-i", str(tmp / "tone.wav"),
-                        "-t", f"{total:.2f}", "-af", "afade=t=in:d=1", str(tmp / "bed.wav")], check=True)
+                        "-t", f"{total:.2f}", "-af",
+                        # A noisy recording's snippet, looped, can sound like machinery: such chapters soften the
+                        # bed ("room_tone_gain") and smooth it into a plain hush.
+                        (f"highpass=f=150,lowpass=f=2200,volume={cfg['room_tone_gain']}," if "room_tone_gain" in cfg else "")
+                        + "afade=t=in:d=1", str(tmp / "bed.wav")], check=True)
 
         inputs, chains, n = ["-i", str(tmp / "bed.wav")], [], 0
         for p, offset in zip(pieces, offsets):
