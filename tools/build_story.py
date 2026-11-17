@@ -170,8 +170,17 @@ def main() -> None:
             ms = int(offset * 1000)
             chains.append(f"[{n}]adelay={ms}|{ms}[v{n}]")
         mix = ";".join(chains) + ";[0]" + "".join(f"[v{k}]" for k in range(1, n + 1)) + \
-            f"amix=inputs={n + 1}:normalize=0:duration=first,loudnorm=I=-18:TP=-2"
-        subprocess.run([FFMPEG, "-v", "error", "-y", *inputs, "-filter_complex", mix,
+            f"amix=inputs={n + 1}:normalize=0:duration=first"
+        subprocess.run([FFMPEG, "-v", "error", "-y", *inputs, "-filter_complex", mix, str(tmp / "mix.wav")], check=True)
+        # Level the whole chapter with ONE fixed gain. A single-pass loudnorm rides the gain like an automatic
+        # volume control: under a title card, with nobody speaking, it turned the room hiss up to speech level.
+        meas = subprocess.run([FFMPEG, "-hide_banner", "-i", str(tmp / "mix.wav"), "-af",
+                               "loudnorm=I=-18:TP=-2:print_format=json", "-f", "null", "-"],
+                              capture_output=True, text=True).stderr
+        m = json.loads(meas[meas.rindex("{"): meas.rindex("}") + 1])
+        ln = (f"loudnorm=I=-18:TP=-2:linear=true:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
+              f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}")
+        subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(tmp / "mix.wav"), "-af", ln, "-ar", "48000",
                         "-c:a", "aac", "-b:a", "128k", str(folder / "audio.m4a")], check=True)
 
         # Optional music bed: a separate, quiet track the page can switch off.
