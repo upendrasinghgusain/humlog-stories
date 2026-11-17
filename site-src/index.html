@@ -438,7 +438,7 @@
   }
 
   function playScene(i) {
-    stopLandingMusic(1200);  // the landing cello steps aside for the story
+    storyOn = true; stopLandingMusic(1200);  // the landing cello steps aside for the story
     if (i < 0 || i >= scenes.length) return;
     stopAll(); closeMenu(); $("tx").classList.remove("open");
     current = i; autoNext = true;
@@ -564,7 +564,7 @@
   // The cello: browsers only allow sound after the visitor has tapped or clicked, so if it cannot start by itself
   // it starts on the first tap; the Sound button turns it on and off; it fades out when a story starts.
   const landingMusic = A.landingMusic ? Object.assign(new Audio(A.landingMusic), { loop: true, volume: 0 }) : null;
-  let musicWanted = true, musicFade = null;
+  let musicWanted = true, musicFade = null, storyOn = false;  // never under a story
   const fadeMusic = (to, ms, then) => {
     clearInterval(musicFade); const from = landingMusic.volume, t0 = performance.now();
     musicFade = setInterval(() => {
@@ -575,8 +575,12 @@
   const soundBtn = () => $("start").querySelector(".lp-sound");
   const markSound = on => { const b = soundBtn(); if (b) { b.setAttribute("aria-pressed", on); b.textContent = on ? "♪ Sound on" : "♪ Sound off"; } };
   function startLandingMusic() {
-    if (!landingMusic || !musicWanted || !$("start").classList.contains("landing")) return;
-    landingMusic.play().then(() => { fadeMusic(0.55, 3500); markSound(true); }).catch(() => markSound(false));
+    if (!landingMusic || !musicWanted || storyOn || !$("start").classList.contains("landing")) return;
+    // play() resolves a moment later: if a story has started meanwhile, it must not fade in underneath it
+    landingMusic.play().then(() => {
+      if (storyOn) { landingMusic.pause(); landingMusic.volume = 0; return; }
+      fadeMusic(0.55, 3500); markSound(true);
+    }).catch(() => markSound(false));
   }
   function stopLandingMusic(ms = 1500) {
     if (landingMusic && !landingMusic.paused) fadeMusic(0, ms, () => landingMusic.pause());
@@ -584,7 +588,7 @@
   }
   addEventListener("pointerdown", ev => {
     if (ev.target.closest(".lp-sound, .go, .resume")) return;
-    if (landingMusic && landingMusic.paused && musicWanted) startLandingMusic();
+    if (landingMusic && landingMusic.paused && musicWanted && !storyOn) startLandingMusic();
   }, { capture: true });
 
   function landingIntro(p) {
@@ -669,7 +673,8 @@
 
   function showStart(linkedId) {
     const person = A.people.find(p => p.id === who);
-    $("startWho").textContent = who === "mum" ? "Mum, in her own voice" : "Dad, in his own voice";
+    storyOn = false;
+    $("startWho").textContent = who === "mum" ? "Mum, in her own voice" : who === "dadi" ? "Dadi ji, in her own voice" : "Dad, in his own voice";
     const convs = new Set(A.chapters.filter(c => personOf(c) === who).map(c => c.recording)).size;
     $("startBy").textContent = `${scenes.length} ${scenes.length === 1 ? "story" : "stories"} from ${convs} ${convs === 1 ? "conversation" : "conversations"}`;
     stopIntro();
