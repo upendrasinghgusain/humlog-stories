@@ -33,11 +33,39 @@
     filter: sepia(.08) brightness(.9) drop-shadow(0 20px 50px rgba(0,0,0,.6));
   }
   .frame .pic { display: block; width: 100%; height: 100%; object-fit: contain; }
-  .frame.on { opacity: 1; animation: drift 30s ease-out forwards; }
-  @keyframes drift {
-    from { transform: scale(1.0); }
-    to   { transform: scale(1.045); }
+  .frame.on { opacity: 1; }
+  /* Slow documentary move (push in, pull out, drift) over the whole time the picture is on screen.
+     It lives on its own class so it keeps moving through the cross-fade instead of snapping back. */
+  .frame.kb { animation: kb var(--kb, 24s) linear forwards; }
+  @keyframes kb {
+    from { transform: translate(var(--tx0, 0%), var(--ty0, 0%)) scale(var(--s0, 1)); }
+    to   { transform: translate(var(--tx1, 0%), var(--ty1, 0%)) scale(var(--s1, 1.07)); }
   }
+  /* Names on a photograph, documentary style: a short rule, the names, then the date */
+  .lower { position: absolute; z-index: 3; left: max(16px, 6vw); bottom: calc(38vh + 3.2vh); max-width: min(72vw, 640px);
+           opacity: 0; transform: translateY(10px); transition: opacity 1.4s ease, transform 1.4s ease; pointer-events: none;
+           text-shadow: 0 2px 14px rgba(0,0,0,.95), 0 0 3px rgba(0,0,0,.9); }
+  .lower::before { content: ""; display: block; width: 34px; height: 2px; background: var(--amber); margin-bottom: 10px; opacity: .9; }
+  .lower b { display: block; font: 500 min(clamp(20px, 2.5vw, 32px), 3.8vh)/1.2 var(--en); color: #f6f0e4; }
+  .lower small { display: block; margin-top: 7px; font: 500 11px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase;
+                 color: var(--amber); }
+  .lower small:empty { display: none; }
+  .lower.show { opacity: 1; transform: none; }
+  .stage:has(.inset.left.show) .lower { opacity: 0; }
+  @media (max-aspect-ratio: 4/5) { .lower { bottom: calc(48vh + 2.4vh); left: 5vw; } }
+  /* Inset: a real photo laid over the picture for a few seconds, like a print set down on the table */
+  .inset { position: absolute; z-index: 4; bottom: calc(38vh + 2.5vh); right: 7vw; pointer-events: none;
+           background: #f4efe4; padding: .7vh .7vh 4.6vh; box-shadow: 0 14px 34px rgba(0,0,0,.55);
+           opacity: 0; transform: translateY(14px) rotate(2.2deg); transition: opacity 1.3s ease, transform 1.3s ease; }
+  .inset.left { right: auto; left: 7vw; transform: translateY(14px) rotate(-2.2deg); }
+  .inset img { display: block; max-height: 30vh; max-width: 24vw; width: auto; height: auto; }
+  .inset span { position: absolute; left: 0; right: 0; bottom: .6vh; text-align: center; color: #5a4632;
+                font: 500 min(1.25vw, 1.7vh)/1.2 var(--ui); letter-spacing: .02em; padding: 0 .6vh;
+                white-space: normal; overflow: hidden; max-height: 3.6vh; }
+  .inset.show { opacity: 1; transform: translateY(0) rotate(2.2deg); }
+  .inset.left.show { transform: translateY(0) rotate(-2.2deg); }
+  @media (max-aspect-ratio: 4/5) { .inset { bottom: calc(48vh + 2vh); right: 4vw; } .inset.left { left: 4vw; }
+                                   .inset img { max-height: 18vh; max-width: 40vw; } .inset span { font-size: 1.4vh; } }
   /* Panorama: a wide band across the frame that glides slowly from one end to the other */
   .frame.pan { animation: none !important; overflow: hidden; }
   .frame.pan .pic { position: absolute; left: 0; top: 50%; width: auto; height: 64%; max-width: none; object-fit: fill;
@@ -49,7 +77,8 @@
   .pointer svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .pointer circle { fill: none; stroke: #f0d6ae; stroke-width: 2.5; opacity: 0;
                     transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 6px rgba(0,0,0,.7)); }
-  .pointer line { stroke: #f0d6ae; stroke-width: 1.8; stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+  .pointer circle { display: none; }  /* no ring over the face: the line stops just short of the person */
+  .pointer line { stroke: #f0d6ae; stroke-width: 2; stroke-linecap: round; stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
                   filter: drop-shadow(0 0 4px rgba(0,0,0,.8)); }
   .pointer .lab { position: absolute; transform: translateY(-50%); opacity: 0; white-space: nowrap;
                   background: rgba(22,16,10,.72); border: 1px solid rgba(240,214,174,.45); border-radius: 4px;
@@ -59,8 +88,8 @@
                         letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
   .frame.on .pointer .ring { animation: ptrIn 1s ease-out 1.6s forwards; }
   .frame.on .pointer .pulse { animation: ptrPulse 2.6s ease-out 2.6s 4; }
-  .frame.on .pointer line { animation: ptrDraw .8s ease-out 2.4s forwards; }
-  .frame.on .pointer .lab { animation: ptrLab .9s ease-out 3.0s forwards; }
+  .frame.on .pointer line { animation: ptrDraw .9s ease-out 1.8s forwards; }
+  .frame.on .pointer .lab { animation: ptrLab .9s ease-out 2.5s forwards; }
   @keyframes ptrIn { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }
   @keyframes ptrPulse { from { opacity: .8; transform: scale(1); } to { opacity: 0; transform: scale(1.5); } }
   @keyframes ptrDraw { to { stroke-dashoffset: 0; } }
@@ -151,6 +180,7 @@
   .unclear { border-bottom: 1px dotted var(--amber); color: #f0d6ae; }
   /* Narration cards: quieter, clearly not Dad's words */
   .line.card-line { padding-top: 22px; }
+  .line.song .who { color: var(--amber); letter-spacing: .14em; }
   .line.card-line .who { color: var(--ink-faint); }
   .line.card-line .hi { font-size: clamp(17px, 2vw, 22px); color: var(--ink-soft); font-style: italic; }
   .line.card-line .en { font-family: var(--ui); font-style: normal; font-size: 12px; letter-spacing: .14em;
@@ -250,7 +280,7 @@
   .video, .video * { cursor: none !important; }
   .credit { margin-top: 18px; font: 400 12px/1.6 var(--ui); color: var(--ink-faint); letter-spacing: .06em; }
   @media (prefers-reduced-motion: reduce) {
-    .frame.on { animation: none; }
+    .frame.kb { animation: none; }
   }
 </style>
 </head>
@@ -259,6 +289,7 @@
   <div id="frames"></div>
   <div class="vignette"></div>
   <div class="tag" id="tag">Illustration · imagined scene</div>
+  <div class="lower" id="lower"><b></b><small></small></div>
 
   <div class="captions" id="captions"></div>
 
@@ -436,13 +467,35 @@
     [["x1", x1], ["y1", y1], ["x2", x2], ["y2", y2]].forEach(([k, v]) => line.setAttribute(k, v));
     line.style.setProperty("--len", Math.hypot(x2 - x1, y2 - y1));
     Object.assign(el.querySelector(".lab").style, { left: lx + "px", top: ly + "px" });
+    frame.style.transformOrigin = `${(W - bw) / 2 + cx}px ${(H - bh) / 2 + cy}px`;  // push in towards the person
   }
 
   // ---- frames (paintings and maps)
   const framesEl = $("frames");
-  const frames = S.images.map(img => {
+  // Camera moves, taken in turn: [scale, x%, y%] from -> to. Photos with a pointer push in on that person.
+  // Camera moves, taken in turn: [zoom from, zoom to, x% from, x% to, y% from, y% to] as fractions of the move.
+  // Photos with a pointer always push in on that person.
+  const MOVES = [[0, 1, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [.3, 1, 1, -1, 0, 0], [1, .3, -1, 1, 0, 0], [.3, 1, 0, 0, .8, -.8]];
+  // photos always drift as well as zoom: a small print that only zooms barely seems to move
+  const PHOTO_MOVES = [[0, 1, 1, -1, 0, 0], [1, 0, -1, 1, 0, 0], [0, 1, 0, 0, 1, -1], [1, 0, 0, 0, -1, 1]];
+  const endOfStory = S.segments[S.segments.length - 1].end;
+  let moveNo = 0, photoNo = 0;
+  const frames = S.images.map((img, idx) => {
     const d = document.createElement("div");
     d.className = "frame" + (img.map ? " map" : "");
+    if (!img.map && !img.pan) {
+      const photo = /^Photograph/.test(img.label || "");
+      const mv = img.point ? MOVES[0] : photo ? PHOTO_MOVES[photoNo++ % PHOTO_MOVES.length] : MOVES[moveNo++ % MOVES.length];
+      const onScreen = (S.images[idx + 1]?.at ?? endOfStory) - img.at;
+      // How far the camera travels. A real photograph usually sits small in the frame (a portrait print in a wide
+      // frame), so the same zoom would move it only a few pixels: photos get a much bigger move, starting a little
+      // smaller and growing into the frame (so they never spread over the captions). Longer shots travel further.
+      const amp = photo ? Math.min(Math.max(onScreen * 0.014, 0.12), 0.2) : Math.min(Math.max(onScreen * 0.006 + 0.03, 0.06), 0.18);
+      const base = photo ? 0.88 : 1, pan = amp * (photo ? 14 : 18);  // pan in % of the frame
+      [["--s0", base + amp * mv[0]], ["--s1", base + amp * mv[1]], ["--tx0", mv[2] * pan + "%"], ["--tx1", mv[3] * pan + "%"],
+       ["--ty0", mv[4] * pan + "%"], ["--ty1", mv[5] * pan + "%"], ["--kb", Math.max(onScreen + 1.5, 6) + "s"]]
+        .forEach(([p, v]) => d.style.setProperty(p, v));
+    }
     framesEl.appendChild(d);
     let m = null;
     if (img.map) {
@@ -451,6 +504,10 @@
     } else {
       // A real <img> with sync decoding: never painted half-loaded (matters for video export).
       d.innerHTML = `<img class="pic" src="${img.src}" alt="" decoding="sync">`;
+      // "size": show a photo smaller than the frame (e.g. a small or rough-edged print), centred
+      if (img.size && !img.pan && !img.point)
+        Object.assign(d.querySelector(".pic").style, { position: "absolute", inset: "0", margin: "auto",
+          width: img.size * 100 + "%", height: img.size * 100 + "%" });
       if (img.pan) {
         // panorama: start at one end, glide to the other while it is on screen
         d.classList.add("pan");
@@ -485,19 +542,40 @@
   };
   window.__mapsReady = () => frames.every(f => !f.m || !f.el.classList.contains("on") ||
     (f.m.ready && f.m.map.areTilesLoaded() && !f.m.map.isMoving() || f.m.map.areTilesLoaded()));
+  // insets: real photos laid over the picture for a few seconds
+  const insets = (S.insets || []).map(x => {
+    const d = document.createElement("div");
+    d.className = "inset" + (x.side === "left" ? " left" : "");
+    d.innerHTML = `<img src="${x.src}" alt="" decoding="sync"><span>${x.label}</span>`;
+    stage.appendChild(d);
+    return { ...x, el: d };
+  });
   let currentFrame = -1;
   function showFrame(i) {
     if (i === currentFrame) return;
     frames.forEach((f, k) => {
       if (k === i) {
-        f.el.classList.remove("on"); void f.el.offsetWidth; f.el.classList.add("on");
+        f.el.classList.remove("on", "kb"); void f.el.offsetWidth; f.el.classList.add("on");
+        if (!f.map && !f.pan) f.el.classList.add("kb");
         if (f.m) { f.m.map.resize(); playMap(f.m); }
       } else f.el.classList.remove("on");
     });
-    $("tag").textContent = frames[i]?.label || "";
+    // "Photograph · names · date" -> the names title; an unknown date is simply left out
+    const [kind, names, when] = (frames[i]?.label || "").split(" · ");
+    $("tag").textContent = kind === "Photograph" ? "Photograph" : frames[i]?.label || "";
+    $("lower").querySelector("b").textContent = kind === "Photograph" ? names || "" : "";
+    $("lower").querySelector("small").textContent = kind === "Photograph" && when && when !== "date not known" ? when : "";
     currentFrame = i;
   }
   showFrame(0);
+  // the first picture sits behind the title card until Listen is pressed: start its camera move then,
+  // so it has not already finished (and gone still) by the time the story begins
+  audio.addEventListener("play", () => {
+    const f = frames[currentFrame];
+    if (audio.currentTime < 1 && f && f.el.classList.contains("kb")) {
+      f.el.classList.remove("kb"); void f.el.offsetWidth; f.el.classList.add("kb");
+    }
+  });
 
   // ---- captions
   const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -519,10 +597,12 @@
     if (i < 0) return;
     const s = S.segments[i];
     const d = document.createElement("div");
-    const kind = s.speaker === "DAD" ? "dad" : s.speaker === "CARD" ? "card-line" : "interviewer";
+    // SONG lines show only the song's title (never its lyrics): "♪ Mum sings"
+    const kind = s.speaker === "DAD" ? "dad" : s.speaker === "CARD" ? "card-line" : s.speaker === "SONG" ? "card-line song" : "interviewer";
     d.className = "line out " + kind;
     d.innerHTML = `${kind === "dad" ? `<div class="who">${S.speakerName}</div>`
-                 : kind === "card-line" ? `<div class="who">Note · not in Dad's voice</div>` : ""}
+                 : kind === "card-line" ? `<div class="who">Note · not in ${S.speakerName}'s voice</div>`
+                 : kind === "card-line song" ? `<div class="who">♪ ${S.speakerName} sings</div>` : ""}
       <div class="hi">${mark(s.text_hi)}</div><div class="en">${mark(s.text_en)}</div>`;
     setTimeout(() => { capEl.appendChild(d); requestAnimationFrame(() => d.classList.remove("out")); }, old ? 350 : 0);
     document.querySelectorAll(".drawer .row").forEach((r, k) => r.classList.toggle("now", k === i));
@@ -630,6 +710,10 @@
     $("fill").style.width = (t / audio.duration * 100) + "%";
     $("time").textContent = `${fmt(t)} / ${fmt(audio.duration || 0)}`;
     let fi = 0; S.images.forEach((img, k) => { if (t >= img.at) fi = k; }); showFrame(fi);
+    insets.forEach(x => x.el.classList.toggle("show", t >= x.at && t < x.at + x.seconds));
+    // names title: in a moment after a photograph appears, out again after about seven seconds
+    const fr = frames[currentFrame];
+    $("lower").classList.toggle("show", !!fr && /^Photograph · /.test(fr.label) && t >= fr.at + 1.2 && t < fr.at + 8.5);
     const li = S.segments.findIndex(s => t >= s.start && t < s.end + 0.6);
     if (li >= 0) showLine(li);
   }

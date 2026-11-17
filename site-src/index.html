@@ -97,16 +97,55 @@
   .photo-bg .blur { position: absolute; inset: -30px; background-size: cover; background-position: center;
     filter: blur(28px) brightness(.32) saturate(.7); transform: scale(1.1); }
   .photo-bg img { position: absolute; left: 50%; top: 50%; max-width: min(78vw, 640px); max-height: 62%;
-    transform: translate(-50%, -50%) scale(1); filter: brightness(.5) sepia(.15); border-radius: 3px;
-    box-shadow: 0 20px 60px rgba(0,0,0,.6); animation: photodrift 40s ease-out forwards; }
-  @keyframes photodrift { to { transform: translate(-50%, -50%) scale(1.06); } }
+    transform: translate(-50%, -50%); filter: brightness(.5) sepia(.15); border-radius: 3px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); animation: photodrift 26s ease-in-out infinite alternate; }
+  /* only the zoom is animated: an animated percentage translate is fixed at 0 while the image is still loading,
+     which left the photo hanging off the bottom-right corner */
+  @keyframes photodrift { from { scale: 1; } to { scale: 1.09; } }  /* never comes to rest */
+  .start .photo-bg .lp.drift { animation: photodrift 26s ease-in-out infinite alternate; transform-origin: 50% 50%; }
   .photo-tag { position: absolute; right: 14px; bottom: calc(86px + var(--safe-b)); z-index: 2; font: 500 10px/1.3 var(--ui);
     letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); padding: 5px 9px; border: 1px solid var(--line);
     border-radius: 999px; background: rgba(11,9,8,.6); max-width: 70vw; }
   .vstage > .head, .vstage > .cap, .vstage > .controls { position: relative; z-index: 1; }
   .cap .h, .cap .e, .vstage .title-h, .vstage .title-e { text-shadow: 0 2px 16px rgba(0,0,0,.85); }
   .start .photo-bg img, .end .photo-bg img { max-height: 70%; filter: brightness(.3) sepia(.2); }
+  /* the landing picture (the four children) is meant to be seen: brighter, the title lifted off it with a shadow */
+  .start.landing .photo-bg img { filter: brightness(.62) sepia(.08); }
+  .start.landing > div:not(.photo-bg):not(.photo-tag) { text-shadow: 0 2px 18px rgba(0,0,0,.95), 0 0 4px rgba(0,0,0,.8); }
   .start > div:not(.photo-bg):not(.photo-tag), .end > div:not(.photo-bg):not(.photo-tag) { position: relative; z-index: 1; }
+  /* Landing intro: the painting of the four children dissolves into the photo, then the camera finds each child
+     in turn with their name, and settles on all four as the title fades in. Tap anywhere to skip. */
+  .start > div:not(.photo-bg):not(.photo-tag) { transition: opacity 1.6s ease; }
+  .start.intro > div:not(.photo-bg):not(.photo-tag) { opacity: 0; pointer-events: none; }
+  .start .photo-bg .lp { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  .start .photo-bg .lp img.pt, .start .photo-bg .lp img.ph { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    max-width: none; max-height: none; transform: none; animation: none; box-shadow: none; border-radius: 0;
+    -webkit-mask-image: radial-gradient(ellipse 74% 72% at 50% 50%, #000 60%, transparent 100%);
+            mask-image: radial-gradient(ellipse 74% 72% at 50% 50%, #000 60%, transparent 100%);
+    transition: opacity 6s ease-in-out, filter 2s ease; }
+  .start .photo-bg .lp img.pt { filter: brightness(.92); }
+  .start .photo-bg .lp img.ph { opacity: 0; filter: saturate(.8) sepia(.1) brightness(.92); }
+  .start .photo-bg .lp.photo img.ph { opacity: 1; }
+  .start .photo-bg .lp.photo img.pt { opacity: 0; }
+  .start .photo-bg .lp.dim img.ph { filter: saturate(.8) sepia(.1) brightness(.6); }
+  /* the spotlight: everything but one face softly blurred and dimmed; it glides from face to face */
+  @property --sx { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+  @property --sy { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+  .start .photo-bg .lp .spot { position: absolute; inset: 0; opacity: 0; pointer-events: none;
+    -webkit-backdrop-filter: blur(5px) brightness(.5) saturate(.7); backdrop-filter: blur(5px) brightness(.5) saturate(.7);
+    -webkit-mask-image: radial-gradient(circle at var(--sx) var(--sy), transparent 0, transparent var(--r0, 40px), #000 var(--r1, 110px));
+            mask-image: radial-gradient(circle at var(--sx) var(--sy), transparent 0, transparent var(--r0, 40px), #000 var(--r1, 110px));
+    transition: opacity 1.4s ease, --sx 1.8s ease-in-out, --sy 1.8s ease-in-out; }
+  .start .photo-bg .lp .spot.on { opacity: 1; }
+  .start .photo-bg .lp .lp-n { position: absolute; transform: translate(-50%, 6px); opacity: 0; text-align: center; white-space: nowrap;
+    transition: opacity 1.2s ease, transform 1.2s ease; text-shadow: 0 2px 12px rgba(0,0,0,.95), 0 0 3px rgba(0,0,0,.9); }
+  .start .photo-bg .lp .lp-n::before { content: ""; display: block; width: 1.5px; height: 18px; margin: 0 auto 6px;
+    background: linear-gradient(rgba(240,214,174,0), var(--amber)); }
+  .start .photo-bg .lp .lp-n b { font: 500 clamp(18px, 2.4vw, 30px)/1.1 var(--en); color: #f6f0e4; letter-spacing: .02em; }
+  .start .photo-bg .lp .lp-n.show { opacity: 1; transform: translate(-50%, 0); }
+  .start .lp-skip { position: absolute; left: 50%; bottom: calc(22px + var(--safe-b)); transform: translateX(-50%); z-index: 3;
+    pointer-events: auto; font: 500 11px/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint);
+    background: rgba(11,9,8,.55); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; }
   /* a moment with a photo: the photo sits above, Dad's words underneath it (never across his face) */
   .vstage.has-photo .photo-bg img { top: calc(41% + var(--safe-t) / 2); max-height: 34%; max-width: min(84vw, 520px); filter: brightness(.82) sepia(.12); }
   .vstage.has-photo .cap { align-self: end; padding-bottom: 18px; }
@@ -324,7 +363,9 @@
   }
   const usePhoto = use => (A.photos || []).find(p => (p.use || []).includes(use));
   // each person's start and end photos are chosen in the private photo list ("use": ["start-mum"], ...)
-  const startPhotoFor = () => usePhoto(who === "dad" ? "start" : "start-" + who) || usePhoto("start");
+  // the site opens on the four children ("landing"); once a person is chosen, their own photo
+  let landing = true;
+  const startPhotoFor = () => (landing && usePhoto("landing")) || usePhoto(who === "dad" ? "start" : "start-" + who) || usePhoto("start");
   const endPhotoFor = () => usePhoto(who === "dad" ? "end" : "end-" + who) || usePhoto("end");
 
   function openMenu() {
@@ -500,12 +541,66 @@
 
   // ------------------------------------------------ start screen (per person)
   $("go").onclick = () => { enterFS(); playScene(firstStory >= 0 ? firstStory : 0); };
+  // ---- landing intro (see the .lp styles)
+  let introTimers = [], introFinish = null;
+  function stopIntro() { introTimers.forEach(clearTimeout); introTimers = []; introFinish = null; $("start").classList.remove("intro"); }
+  function landingIntro(p, painted) {
+    const slot = $("startPhoto"), faces = p.faces || [];
+    slot.innerHTML = `<div class="blur" style="background-image:url('${esc(p.url)}')"></div><div class="lp">` +
+      `<img class="pt" src="${esc((painted || p).url)}" alt=""><img class="ph" src="${esc(p.url)}" alt="${esc(p.caption)}">` +
+      `<div class="spot"></div>` +
+      faces.map(f => `<div class="lp-n" style="left:${f.x * 100}%;top:${(f.y + 0.12) * 100}%"><b>${esc(f.name)}</b></div>`).join("") +
+      `</div><button class="lp-skip" type="button">Skip intro</button>`;
+    $("startPhotoTag").textContent = photoTag(p); slot.hidden = false; $("startPhotoTag").hidden = false;
+    const lp = slot.querySelector(".lp"), ph = slot.querySelector(".ph"), spot = slot.querySelector(".spot");
+    const names = [...slot.querySelectorAll(".lp-n")];
+    const box = () => {
+      const sw = slot.clientWidth, sh = slot.clientHeight, ar = (ph.naturalWidth / ph.naturalHeight) || 1.54;
+      let w = Math.min(sw * 0.86, 920), h = w / ar;
+      if (h > sh * 0.7) { h = sh * 0.7; w = h * ar; }
+      lp.style.width = w + "px"; lp.style.height = h + "px";
+      spot.style.setProperty("--r0", w * 0.06 + "px"); spot.style.setProperty("--r1", w * 0.15 + "px");
+      return { sw, sh, w, h };
+    };
+    // px translate + scale only (an animated % translate misplaces images that are still loading)
+    const full = (ms, sc = 1) => {
+      const b = box();
+      lp.style.transition = ms ? `transform ${ms}ms ease-out` : "none";
+      lp.style.transform = `translate(${(b.sw - b.w * sc) / 2}px, ${(b.sh - b.h * sc) / 2}px) scale(${sc})`;
+    };
+    const T = (ms, fn) => introTimers.push(setTimeout(fn, ms));
+    introFinish = () => {
+      stopIntro(); lp.classList.add("photo", "dim"); spot.classList.remove("on");
+      names.forEach(n => n.classList.remove("show")); slot.querySelector(".lp-skip")?.remove();
+      full(0); lp.classList.add("drift");  // then a slow drift in and out that never stops
+    };
+    full(0);
+    if (!faces.length || matchMedia("(prefers-reduced-motion: reduce)").matches) { introFinish(); return; }
+    $("start").classList.add("intro");
+    const finish = introFinish;
+    Promise.all([...slot.querySelectorAll(".lp img")].map(i => i.decode().catch(() => {}))).then(() => {
+      if (introFinish !== finish) return;  // skipped or replaced meanwhile
+      full(0);
+      T(1500, () => lp.classList.add("photo"));            // painting dissolves into the photograph
+      T(7800, () => names.forEach(n => n.classList.add("show")));     // all four names come up together, slowly
+      T(11800, () => names.forEach(n => n.classList.remove("show")));  // and slowly go again
+      T(13300, () => introFinish && introFinish());                    // then the title
+    });
+  }
+  $("start").addEventListener("click", ev => { if (introFinish && !ev.target.closest(".go, .resume")) introFinish(); });
+  addEventListener("keydown", () => introFinish && introFinish());
+  addEventListener("resize", () => introFinish && introFinish());
+
   function showStart(linkedId) {
     const person = A.people.find(p => p.id === who);
     $("startWho").textContent = who === "mum" ? "Mum, in her own voice" : "Dad, in his own voice";
     const convs = new Set(A.chapters.filter(c => personOf(c) === who).map(c => c.recording)).size;
     $("startBy").textContent = `${scenes.length} ${scenes.length === 1 ? "story" : "stories"} from ${convs} ${convs === 1 ? "conversation" : "conversations"}`;
-    showPhoto("startPhoto", "startPhotoTag", startPhotoFor());
+    stopIntro();
+    const lpPhoto = landing && usePhoto("landing");
+    if (lpPhoto) landingIntro(lpPhoto, usePhoto("landing-painted")); else showPhoto("startPhoto", "startPhotoTag", startPhotoFor());
+    $("start").classList.toggle("landing", !!lpPhoto);
+    if (lpPhoto) $("startWho").textContent = "A family's stories, in their own voices";
     // a shared link (#story-id) or where you left off last time
     const linked = sceneIndex(linkedId || "");
     const last = sceneIndex(store.get("lastScene") || "");
@@ -524,7 +619,7 @@
     showStart(linkedId);
   }
   $("people").addEventListener("click", ev => {
-    const b = ev.target.closest("button.chip"); if (b && b.dataset.who !== who) setPerson(b.dataset.who);
+    const b = ev.target.closest("button.chip"); if (b && (b.dataset.who !== who || landing)) { landing = false; setPerson(b.dataset.who); }
   });
   // open on the person a shared link belongs to, else whoever was viewed last
   const hash = location.hash.slice(1), linkedCh = A.chapters.find(c => c.id === hash);

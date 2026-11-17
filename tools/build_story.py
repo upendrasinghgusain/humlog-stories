@@ -90,7 +90,22 @@ def main() -> None:
     mutes += [tuple(m) for m in cfg.get("mute", []) if len(m) == 2]  # hand-checked spans only
 
     pieces, offsets, segs, t, card_no = [], [], [], 1.2, 0  # a short breath of room sound first
+    songs = []  # (start, end) in the edited timeline, for ducking the music
     for item in cfg["edit"]:
+        if "song" in item:
+            # A few seconds of the narrator singing, from a separate recording. The caption shows only the
+            # song's title, never its lyrics.
+            sg = item["song"]
+            dur = sg["end"] - sg["start"]
+            segs.append({"start": round(t, 2), "end": round(t + dur, 2), "speaker": "SONG",
+                         "text_hi": sg["hi"], "text_en": sg["en"], "key": f"song{len(songs)}"})
+            pieces.append(("clip", sg["start"], sg["end"], ROOT / sg["file"]))
+            offsets.append(t)
+            songs.append((t, t + dur))
+            t += dur + gap
+            pieces.append(("silence", gap))
+            offsets.append(t - gap)
+            continue
         if "card" in item:
             segs.append({"start": round(t, 2), "end": round(t + item["seconds"], 2), "speaker": "CARD",
                          "text_hi": item["card"]["hi"], "text_en": item["card"]["en"], "key": f"card{card_no}"})
@@ -135,14 +150,18 @@ def main() -> None:
                 continue
             n += 1
             f = tmp / f"{n:03d}.wav"
-            # Interviewer bursts are turned right down (not to zero) so the room never "drops out".
-            mute = "".join(f"volume=enable='between(t,{max(x - p[1], 0):.2f},{y - p[1]:.2f})':volume=0.08,"
-                           for x, y in mutes if y > p[1] and x < p[2])
             dur = p[2] - p[1]
+            if len(p) > 3:  # a song clip from its own recording: level-matched to the speech, softer fades
+                af = f"loudnorm=I=-21.5:TP=-3,afade=t=in:d=0.5,afade=t=out:st={dur - 1.2:.3f}:d=1.2"
+                src = p[3]
+            else:
+                # Interviewer bursts are turned right down (not to zero) so the room never "drops out".
+                mute = "".join(f"volume=enable='between(t,{max(x - p[1], 0):.2f},{y - p[1]:.2f})':volume=0.08,"
+                               for x, y in mutes if y > p[1] and x < p[2])
+                af = mute + f"afade=t=in:d=0.2,afade=t=out:st={dur - 0.35:.3f}:d=0.35"
+                src = original
             subprocess.run([FFMPEG, "-v", "error", "-ss", f"{p[1]:.3f}", "-t", f"{dur:.3f}",
-                            "-i", str(original), "-ac", "1", "-ar", str(RATE),
-                            "-af", mute + f"afade=t=in:d=0.2,afade=t=out:st={dur - 0.35:.3f}:d=0.35", str(f)],
-                           check=True)
+                            "-i", str(src), "-ac", "1", "-ar", str(RATE), "-af", af, str(f)], check=True)
             inputs += ["-i", str(f)]
             ms = int(offset * 1000)
             chains.append(f"[{n}]adelay={ms}|{ms}[v{n}]")
@@ -155,7 +174,9 @@ def main() -> None:
         if cfg.get("music"):
             subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(folder / cfg["music"]),
                             "-t", f"{total:.2f}",
-                            "-af", f"loudnorm=I=-33:TP=-9,afade=t=in:d=4,afade=t=out:st={total - 5:.2f}:d=5",
+                            "-af", f"loudnorm=I=-33:TP=-9,afade=t=in:d=4,afade=t=out:st={total - 5:.2f}:d=5"
+                            # the music steps aside while the narrator sings
+                            + "".join(f",volume=enable='between(t,{a - 1:.2f},{b + 1:.2f})':volume=0.12" for a, b in songs),
                             "-c:a", "aac", "-b:a", "128k", str(folder / "music.m4a")], check=True)
 
     # Visuals: anchor each to the start of its segment / card. Real photographs (from
@@ -181,13 +202,24 @@ def main() -> None:
         visuals.append({**v, "at": (max(at - 0.4, 0) if visuals else 0) + v.get("delay", 0)})
 
     visuals.sort(key=lambda v: v["at"])  # the player expects them in time order
-    clips = [p for p in pieces if p[0] == "clip"]
+
+    # Insets: a real photo laid over the current picture for a few seconds (a print in the corner),
+    # so more family photos can appear without interrupting the paintings or the story.
+    insets = []
+    for v in cfg.get("insets", []):
+        ph = photos[v["photo"]]
+        (folder / "photos").mkdir(exist_ok=True)
+        shutil.copy2(pj.parent / f"{ph['id']}.jpg", folder / "photos" / f"{ph['id']}.jpg")
+        insets.append({"src": f"photos/{ph['id']}.jpg", "label": f"{ph['caption']} · {ph['date']}",
+                       "at": starts[str(v["seg"])] + v.get("delay", 1.0), "seconds": v.get("seconds", 6.5),
+                       "side": v.get("side", "right")})
+    clips = [p for p in pieces if p[0] == "clip" and len(p) == 3]  # interview passages (not songs)
     story = {
         "audio": "audio.m4a",
         "music": "music.m4a" if cfg.get("music") else None,
         "title_hi": cfg["title_hi"], "title_en": cfg["title_en"], "place": cfg["place"],
         "byline": cfg["byline"], "speakerName": cfg["speakerName"], "note": cfg["note"],
-        "quote": cfg["quote"], "credit": cfg.get("credit", ""), "places": cfg.get("places", {}), "images": visuals, "segments": segs,
+        "quote": cfg["quote"], "credit": cfg.get("credit", ""), "places": cfg.get("places", {}), "images": visuals, "insets": insets, "segments": segs,
         "source": (f"Source: {cfg['recording_id']}, {mmss(clips[0][1])}–{mmss(clips[-1][2])}, "
                    f"{len(clips)} passages, questions removed<br>"
                    "Transcript: AI draft, unreviewed<br>"

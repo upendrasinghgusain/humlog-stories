@@ -188,7 +188,8 @@ def main() -> None:
         for p in json.loads(pj.read_text(encoding="utf-8")):
             shutil.copy2(pj.parent / f"{p['id']}.jpg", SITE / "photos" / f"{p['id']}.jpg")
             photos.append({"id": p["id"], "url": stamp(f"photos/{p['id']}.jpg"), "caption": p["caption"], "date": p["date"],
-                           "edits": p.get("_edits_text", ""), "events": p.get("events", []), "use": p.get("use", [])})
+                           "edits": p.get("_edits_text", ""), "events": p.get("events", []), "use": p.get("use", []),
+                           **({"faces": p["faces"]} if p.get("faces") else {})})
     for e in events:
         e["photos"] = [p["id"] for p in photos if e["id"] in p["events"]]
 
